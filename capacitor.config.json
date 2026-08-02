@@ -1,0 +1,8 @@
+{
+  "appId": "com.ungoonify.app",
+  "appName": "UnGoonify",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true
+  }
+}

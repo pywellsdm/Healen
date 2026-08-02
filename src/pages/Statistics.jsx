@@ -1,0 +1,254 @@
+import { useState, useEffect } from "react";
+import { db } from "@/lib/store";
+import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, formatDate } from "@/lib/streakUtils";
+import MilestoneTracker from "@/components/streak/MilestoneTracker";
+import { TRIGGER_LABELS, MOOD_EMOJI } from "@/lib/motivation";
+import {
+  BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell,
+  LineChart, Line, CartesianGrid,
+} from "recharts";
+import { TrendingUp, Calendar, Target, Flame, Award, Activity } from "lucide-react";
+
+const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#ec4899", "#f43f5e", "#f59e0b", "#10b981", "#06b6d4", "#3b82f6"];
+
+export default function Statistics() {
+  const [streak, setStreak] = useState(null);
+  const [checkIns, setCheckIns] = useState([]);
+  const [relapses, setRelapses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("overview");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await ensureStreakRecord();
+        setStreak(s);
+        const [ci, rel] = await Promise.all([
+          db.entities.CheckIn.filter({}, "-checkin_date", 200),
+          db.entities.Relapse.filter({}, "-relapse_date", 200),
+        ]);
+        setCheckIns(ci || []);
+        setRelapses(rel || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-8 h-8 border-4 border-slate-700 border-t-indigo-400 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const currentDays = calculateStreakDays(streak?.streak_start_date);
+  const progressDays = calculateStreakProgress(streak?.streak_start_date);
+
+  // Trigger breakdown for pie chart
+  const triggerData = Object.entries(
+    relapses.reduce((acc, r) => {
+      acc[r.trigger] = (acc[r.trigger] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([name, value]) => ({ name: TRIGGER_LABELS[name] || name, value }));
+
+  // Last 7 days check-in data (mood over time)
+  const last7 = [...Array(7)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const dateStr = d.toISOString().split("T")[0];
+    const dayCheckins = checkIns.filter((c) => c.checkin_date === dateStr);
+    const moodMap = { great: 5, good: 4, okay: 3, struggling: 2, hard: 1 };
+    const avg = dayCheckins.length > 0
+      ? dayCheckins.reduce((s, c) => s + (moodMap[c.mood] || 3), 0) / dayCheckins.length
+      : 0;
+    return {
+      day: d.toLocaleDateString(undefined, { weekday: "short" }),
+      mood: Math.round(avg * 10) / 10,
+      checkins: dayCheckins.length,
+    };
+  });
+
+  // Urge level over time
+  const urgeData = [...Array(14)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (13 - i));
+    const dateStr = d.toISOString().split("T")[0];
+    const dayCheckins = checkIns.filter((c) => c.checkin_date === dateStr);
+    const avg = dayCheckins.length > 0
+      ? dayCheckins.reduce((s, c) => s + (c.urge_level || 0), 0) / dayCheckins.length
+      : 0;
+    return {
+      day: `${d.getMonth() + 1}/${d.getDate()}`,
+      urge: Math.round(avg * 10) / 10,
+    };
+  });
+
+  const successRate = relapses.length > 0
+    ? Math.round(((streak?.total_clean_days || 0) / ((streak?.total_clean_days || 0) + relapses.length)) * 100)
+    : 100;
+
+  const stats = [
+    { icon: Flame, label: "Current Streak", value: currentDays, unit: "days", color: "text-orange-400" },
+    { icon: Award, label: "Longest Streak", value: streak?.longest_streak_days || 0, unit: "days", color: "text-yellow-400" },
+    { icon: Calendar, label: "Total Clean Days", value: streak?.total_clean_days || 0, unit: "days", color: "text-emerald-400" },
+    { icon: Target, label: "Success Rate", value: successRate, unit: "%", color: "text-indigo-400" },
+    { icon: TrendingUp, label: "Daily Check-Ins", value: streak?.daily_goal_streak || 0, unit: "streak", color: "text-cyan-400" },
+    { icon: Activity, label: "Total Resets", value: streak?.total_relapses || 0, unit: "", color: "text-rose-400" },
+  ];
+
+  return (
+    <div className="px-5 pt-12 pb-4">
+      <h1 className="text-xl font-bold text-white mb-1">Your Statistics</h1>
+      <p className="text-xs text-slate-500 mb-6">Every data point is a story of resilience.</p>
+
+      {/* Tab selector */}
+      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-xl p-1 mb-6">
+        {[
+          { key: "overview", label: "Overview" },
+          { key: "milestones", label: "Milestones" },
+          { key: "history", label: "History" },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+              tab === t.key ? "bg-white/10 text-white" : "text-slate-500"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <>
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            {stats.map((s) => {
+              const Icon = s.icon;
+              return (
+                <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                  <Icon className={`w-5 h-5 ${s.color} mb-2`} />
+                  <p className="text-2xl font-bold text-white tabular-nums">
+                    {s.value}<span className="text-sm text-slate-500 ml-1">{s.unit}</span>
+                  </p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">{s.label}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Mood chart */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+            <p className="text-sm font-semibold text-white mb-1">Mood — Last 7 Days</p>
+            <p className="text-xs text-slate-500 mb-4">Higher = feeling better</p>
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={last7}>
+                <XAxis dataKey="day" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis domain={[0, 5]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={20} />
+                <Tooltip
+                  contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: "#94a3b8" }}
+                />
+                <Line type="monotone" dataKey="mood" stroke="#818cf8" strokeWidth={2} dot={{ fill: "#818cf8", r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Urge level chart */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+            <p className="text-sm font-semibold text-white mb-1">Urge Intensity — Last 14 Days</p>
+            <p className="text-xs text-slate-500 mb-4">Tracking your triggers over time</p>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={urgeData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="day" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} interval={1} />
+                <YAxis domain={[0, 10]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={20} />
+                <Tooltip
+                  contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: "#94a3b8" }}
+                  cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                />
+                <Bar dataKey="urge" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Trigger pie chart */}
+          {triggerData.length > 0 && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+              <p className="text-sm font-semibold text-white mb-1">Relapse Triggers</p>
+              <p className="text-xs text-slate-500 mb-4">Know your patterns, break the cycle</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={triggerData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={40}>
+                    {triggerData.map((_, i) => (
+                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="grid grid-cols-2 gap-1 mt-2">
+                {triggerData.map((t, i) => (
+                  <div key={t.name} className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                    <div className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="truncate">{t.name}</span>
+                    <span className="text-slate-600 ml-auto">{t.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "milestones" && (
+        <MilestoneTracker currentDays={currentDays} progressDays={progressDays} />
+      )}
+
+      {tab === "history" && (
+        <div className="space-y-3">
+          {relapses.length === 0 ? (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+              <Award className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-white">No resets recorded</p>
+              <p className="text-xs text-slate-500 mt-1">Your record is clean. Keep it going.</p>
+            </div>
+          ) : (
+            relapses.sort((a, b) => new Date(b.relapse_date ?? 0) - new Date(a.relapse_date ?? 0)).map((r) => (
+              <div key={r.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{MOOD_EMOJI[r.mood] || "⚪"}</span>
+                    <div>
+                      <p className="text-sm font-medium text-white">{formatDate(r.relapse_date)}</p>
+                      <p className="text-[10px] text-slate-500 capitalize">{r.time_of_day}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500">Lost</p>
+                    <p className="text-sm font-bold text-rose-400">{r.streak_before_relapse}d</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
+                    {TRIGGER_LABELS[r.trigger] || r.trigger}
+                  </span>
+                  {r.notes && <span className="text-[10px] text-slate-500 truncate">"{r.notes}"</span>}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

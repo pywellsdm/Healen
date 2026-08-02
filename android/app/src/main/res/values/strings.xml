@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">UnGoonify</string>
+    <string name="title_activity_main">UnGoonify</string>
+    <string name="package_name">com.ungoonify.app</string>
+    <string name="custom_url_scheme">com.ungoonify.app</string>
+</resources>
