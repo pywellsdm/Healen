@@ -13,9 +13,9 @@
     --text-primary: #f1f5f9;
     --text-secondary: #aab8cc;
     --text-muted: #7d8ca3;
-    --ambient-1: rgba(99, 102, 241, 0.12);
-    --ambient-2: rgba(168, 85, 247, 0.08);
-    --ambient-3: rgba(6, 182, 212, 0.05);
+    --ambient-1: hsl(var(--accent-hue) 70% 58% / 0.14);
+    --ambient-2: hsl(calc(var(--accent-hue) + 45) 72% 55% / 0.1);
+    --ambient-3: hsl(calc(var(--accent-hue) + 90) 75% 52% / 0.07);
   }
 
   .light {
@@ -28,9 +28,9 @@
     --text-primary: #1e293b;
     --text-secondary: #475569;
     --text-muted: #94a3b8;
-    --ambient-1: rgba(99, 102, 241, 0.15);
-    --ambient-2: rgba(168, 85, 247, 0.1);
-    --ambient-3: rgba(6, 182, 212, 0.08);
+    --ambient-1: hsl(var(--accent-hue) 70% 60% / 0.17);
+    --ambient-2: hsl(calc(var(--accent-hue) + 45) 72% 56% / 0.12);
+    --ambient-3: hsl(calc(var(--accent-hue) + 90) 75% 52% / 0.09);
   }
 }
 
@@ -151,9 +151,9 @@ input[type="range"]::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #6366f1;
+  background: hsl(var(--accent-hue) 70% 60%);
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 2px 8px hsl(var(--accent-hue) 70% 60% / 0.4);
 }
 
 /* ---- Celebration / confetti ---- */
@@ -178,8 +178,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 @keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 40px var(--glow, rgba(99,102,241,0.35)); }
-  50% { box-shadow: 0 0 90px var(--glow, rgba(99,102,241,0.6)); }
+  0%, 100% { box-shadow: 0 0 40px var(--glow, hsl(var(--accent-hue) 70% 60% / 0.35)); }
+  50% { box-shadow: 0 0 90px var(--glow, hsl(var(--accent-hue) 70% 60% / 0.6)); }
 }
 .animate-glow {
   animation: glow-pulse 1.6s ease-in-out infinite;
@@ -247,4 +247,11 @@ input[type="range"]::-webkit-slider-thumb {
 /* shadows + form controls */
 .shadow-indigo-500\/40 { --tw-shadow-color: hsl(var(--accent-hue) 70% 60% / 0.4); }
 .shadow-indigo-900\/40 { --tw-shadow-color: hsl(var(--accent-hue) 70% 30% / 0.4); }
+.shadow-indigo-400\/20 { --tw-shadow-color: hsl(var(--accent-hue) 75% 65% / 0.2); }
+.shadow-purple-400\/30 { --tw-shadow-color: hsl(calc(var(--accent-hue) + 40) 75% 65% / 0.3); }
 .accent-indigo-500 { accent-color: hsl(var(--accent-hue) 70% 60%); }
+
+/* dark surface tints (milestones, celebration) */
+.bg-indigo-900\/30 { background-color: hsl(var(--accent-hue) 55% 24% / 0.3); }
+.bg-purple-900\/30 { background-color: hsl(calc(var(--accent-hue) + 40) 55% 24% / 0.3); }
+.border-purple-400\/40 { border-color: hsl(calc(var(--accent-hue) + 40) 75% 65% / 0.4); }

@@ -20,7 +20,10 @@ function extractHue(imageUrl) {
         if (!ctx) return resolve(null);
         ctx.drawImage(img, 0, 0, 24, 24);
         const { data } = ctx.getImageData(0, 0, 24, 24);
-        let hueSum = 0;
+        // Weighted circular mean of the hue so red/blue mixes don't land on
+        // a random intermediate hue (naive averaging breaks around 0/360).
+        let x = 0;
+        let y = 0;
         let weightSum = 0;
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
@@ -39,11 +42,13 @@ function extractHue(imageUrl) {
           else h = (r - g) / d + 4;
           h = h * 60;
           if (h < 0) h += 360;
+          const rad = (h * Math.PI) / 180;
           const weight = sat * l;
-          hueSum += h * weight;
+          x += Math.cos(rad) * weight;
+          y += Math.sin(rad) * weight;
           weightSum += weight;
         }
-        resolve(weightSum === 0 ? null : (hueSum / weightSum) % 360);
+        resolve(weightSum === 0 ? null : ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360);
       } catch {
         resolve(null);
       }
