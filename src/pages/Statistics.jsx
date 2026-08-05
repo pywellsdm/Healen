@@ -47,6 +47,7 @@ export default function Statistics() {
 
   const currentDays = calculateStreakDays(streak?.streak_start_date);
   const progressDays = calculateStreakProgress(streak?.streak_start_date);
+  const bestDays = Math.max(streak?.longest_streak_days || 0, currentDays);
 
   // Trigger breakdown for pie chart
   const triggerData = Object.entries(
@@ -94,7 +95,7 @@ export default function Statistics() {
 
   const stats = [
     { icon: Flame, label: "Current Streak", value: currentDays, unit: "days", color: "text-orange-400" },
-    { icon: Award, label: "Longest Streak", value: streak?.longest_streak_days || 0, unit: "days", color: "text-yellow-400" },
+    { icon: Award, label: "Longest Streak", value: bestDays, unit: "days", color: "text-yellow-400" },
     { icon: Calendar, label: "Total Clean Days", value: streak?.total_clean_days || 0, unit: "days", color: "text-emerald-400" },
     { icon: Target, label: "Success Rate", value: successRate, unit: "%", color: "text-indigo-400" },
     { icon: TrendingUp, label: "Daily Check-Ins", value: streak?.daily_goal_streak || 0, unit: "streak", color: "text-cyan-400" },

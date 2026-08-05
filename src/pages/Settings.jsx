@@ -8,11 +8,10 @@ import { IS_NATIVE } from "@/lib/appInfo";
 import { AI_PERSONAS } from "@/lib/aiContext";
 import {
   User, Bell, Heart, Target, Save, Sparkles, Trash2,
-  Palette, Image, Bot, Upload, Copy, Check, Send,
+  Palette, Image, Bot, Upload, Copy, Check,
   Wifi, WifiOff, Download, ArchiveRestore, FileUp, Bitcoin, Wallet,
 } from "lucide-react";
 import { exportBackup, importBackup } from "@/lib/backup";
-import { TELEGRAM_GROUP_URL, openExternalLink } from "@/lib/telegram";
 import { cn } from "@/lib/utils";
 
 const TONES = [
@@ -743,20 +742,6 @@ export default function Settings() {
 
         {backupMsg && <p className="text-[11px] text-emerald-400/80 mt-2">{backupMsg}</p>}
         {restoreMsg && <p className={cn("text-[11px] mt-2", restoreMsg.startsWith("Restore failed") ? "text-rose-400/80" : "text-emerald-400/80")}>{restoreMsg}</p>}
-      </Section>
-
-      <Section icon={Send} title="Telegram Group">
-        <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-          Join our Telegram group — the real community. Share stories, streak updates,
-          wins and struggles with people who get it. You're not in this alone.
-        </p>
-        <button
-          onClick={() => openExternalLink(TELEGRAM_GROUP_URL)}
-          className="w-full py-3 rounded-xl bg-sky-500/15 border border-sky-400/30 text-sky-200 text-xs font-medium flex items-center justify-center gap-2 hover:bg-sky-500/25 transition-colors"
-        >
-          <Send className="w-3.5 h-3.5" />
-          Join the Telegram group ↗
-        </button>
       </Section>
 
       {/* Save button */}

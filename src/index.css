@@ -6,13 +6,13 @@
   :root, .dark {
     --app-bg: #0A0B14;
     --app-bg-2: #0E0F1A;
-    --glass-bg: rgba(255, 255, 255, 0.05);
-    --glass-bg-strong: rgba(255, 255, 255, 0.08);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-border-strong: rgba(255, 255, 255, 0.15);
+    --glass-bg: rgba(13, 16, 30, 0.6);
+    --glass-bg-strong: rgba(13, 16, 30, 0.78);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border-strong: rgba(255, 255, 255, 0.2);
     --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
+    --text-secondary: #aab8cc;
+    --text-muted: #7d8ca3;
     --ambient-1: rgba(99, 102, 241, 0.12);
     --ambient-2: rgba(168, 85, 247, 0.08);
     --ambient-3: rgba(6, 182, 212, 0.05);
@@ -39,14 +39,14 @@
   .glass {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
   }
   .glass-strong {
     background: var(--glass-bg-strong);
     border: 1px solid var(--glass-border-strong);
-    backdrop-filter: blur(30px) saturate(200%);
-    -webkit-backdrop-filter: blur(30px) saturate(200%);
+    backdrop-filter: blur(32px) saturate(180%);
+    -webkit-backdrop-filter: blur(32px) saturate(180%);
   }
   /* Glass sheen overlay for premium feel */
   .glass-sheen {
@@ -103,6 +103,18 @@
 .light .bg-slate-900\/80 { background-color: rgba(255, 255, 255, 0.7); }
 .light .bg-slate-900\/50 { background-color: rgba(255, 255, 255, 0.5); }
 
+/* ---- Dark glass surfaces: keep every panel readable on any wallpaper ---- */
+.bg-white\/\[0\.02\] { background-color: rgba(17, 20, 36, 0.24); }
+.bg-white\/5 { background-color: rgba(17, 20, 36, 0.45); }
+.bg-white\/10 { background-color: rgba(17, 20, 36, 0.6); }
+.bg-white\/15 { background-color: rgba(17, 20, 36, 0.68); }
+.bg-white\/20 { background-color: rgba(17, 20, 36, 0.75); }
+.bg-white\/30 { background-color: rgba(17, 20, 36, 0.8); }
+
+.dark .text-slate-400 { color: #a7b4c6; }
+.dark .text-slate-500 { color: #8b99b0; }
+.dark .text-slate-600 { color: #6e7d95; }
+
 /* Keep gradient text visible in light mode */
 .light .bg-clip-text { -webkit-background-clip: text; }
 
@@ -143,3 +155,96 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
 }
+
+/* ---- Celebration / confetti ---- */
+@keyframes confetti-fall {
+  0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate3d(var(--drift, 0px), 110vh, 0) rotate(720deg); opacity: 0.6; }
+}
+.animate-confetti {
+  position: absolute;
+  top: 0;
+  animation: confetti-fall var(--dur, 3s) linear forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop-in {
+  animation: pop-in 0.5s cubic-bezier(0.22, 1.4, 0.36, 1) forwards;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 40px var(--glow, rgba(99,102,241,0.35)); }
+  50% { box-shadow: 0 0 90px var(--glow, rgba(99,102,241,0.6)); }
+}
+.animate-glow {
+  animation: glow-pulse 1.6s ease-in-out infinite;
+}
+
+/* ---- Wallpaper-matched accent ---- */
+:root {
+  --accent-hue: 240;
+  --accent: hsl(var(--accent-hue) 70% 62%);
+  --accent-soft: hsl(var(--accent-hue) 80% 72%);
+  --accent-strong: hsl(var(--accent-hue) 70% 56%);
+}
+
+/* text accents */
+.text-indigo-200 { color: hsl(var(--accent-hue) 85% 80%); }
+.text-indigo-300 { color: hsl(var(--accent-hue) 80% 72%); }
+.text-indigo-300\/70 { color: hsl(var(--accent-hue) 80% 72% / 0.7); }
+.text-indigo-300\/80 { color: hsl(var(--accent-hue) 80% 72% / 0.8); }
+.text-indigo-400 { color: hsl(var(--accent-hue) 72% 64%); }
+.text-purple-300 { color: hsl(calc(var(--accent-hue) + 40) 70% 72%); }
+
+/* surface tints */
+.bg-indigo-300 { background-color: hsl(var(--accent-hue) 70% 70%); }
+.bg-indigo-400 { background-color: hsl(var(--accent-hue) 65% 60%); }
+.bg-indigo-400\/50 { background-color: hsl(var(--accent-hue) 65% 60% / 0.5); }
+.bg-indigo-500 { background-color: hsl(var(--accent-hue) 70% 56%); }
+.bg-indigo-500\/10 { background-color: hsl(var(--accent-hue) 70% 62% / 0.1); }
+.bg-indigo-500\/15 { background-color: hsl(var(--accent-hue) 70% 62% / 0.15); }
+.bg-indigo-500\/20 { background-color: hsl(var(--accent-hue) 70% 62% / 0.2); }
+.bg-indigo-500\/25 { background-color: hsl(var(--accent-hue) 70% 62% / 0.25); }
+.bg-indigo-500\/30 { background-color: hsl(var(--accent-hue) 70% 62% / 0.3); }
+.bg-indigo-600\/15 { background-color: hsl(var(--accent-hue) 70% 52% / 0.15); }
+
+/* borders */
+.border-indigo-300 { border-color: hsl(var(--accent-hue) 70% 72%); }
+.border-indigo-300\/40 { border-color: hsl(var(--accent-hue) 70% 72% / 0.4); }
+.border-indigo-400 { border-color: hsl(var(--accent-hue) 65% 64%); }
+.border-indigo-400\/20 { border-color: hsl(var(--accent-hue) 65% 64% / 0.2); }
+.border-indigo-400\/30 { border-color: hsl(var(--accent-hue) 65% 64% / 0.3); }
+.border-indigo-400\/40 { border-color: hsl(var(--accent-hue) 65% 64% / 0.4); }
+.border-indigo-400\/50 { border-color: hsl(var(--accent-hue) 65% 64% / 0.5); }
+.border-indigo-500\/25 { border-color: hsl(var(--accent-hue) 70% 62% / 0.25); }
+
+/* gradients */
+.from-indigo-400 { --tw-gradient-from: hsl(var(--accent-hue) 70% 64%); }
+.from-indigo-400\/40 { --tw-gradient-from: hsl(var(--accent-hue) 70% 64% / 0.4); }
+.from-indigo-500 { --tw-gradient-from: hsl(var(--accent-hue) 70% 56%); }
+.from-indigo-500\/20 { --tw-gradient-from: hsl(var(--accent-hue) 70% 56% / 0.2); }
+.from-indigo-500\/30 { --tw-gradient-from: hsl(var(--accent-hue) 70% 56% / 0.3); }
+.to-indigo-300 { --tw-gradient-to: hsl(var(--accent-hue) 80% 72%); }
+.to-indigo-500 { --tw-gradient-to: hsl(var(--accent-hue) 70% 56%); }
+.to-indigo-500\/15 { --tw-gradient-to: hsl(var(--accent-hue) 70% 56% / 0.15); }
+.to-indigo-500\/25 { --tw-gradient-to: hsl(var(--accent-hue) 70% 56% / 0.25); }
+.to-purple-500 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 56%); }
+.to-purple-500\/10 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 56% / 0.1); }
+.to-purple-500\/20 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 56% / 0.2); }
+.to-purple-500\/30 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 56% / 0.3); }
+.to-purple-600 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 50%); }
+.to-purple-600\/10 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 50% / 0.1); }
+.to-purple-600\/20 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 50% / 0.2); }
+.to-purple-950\/30 { --tw-gradient-to: hsl(calc(var(--accent-hue) + 40) 70% 22% / 0.3); }
+.via-indigo-100 { --tw-gradient-via: hsl(var(--accent-hue) 90% 92%); }
+.via-indigo-700 { --tw-gradient-via: hsl(var(--accent-hue) 70% 48%); }
+
+/* shadows + form controls */
+.shadow-indigo-500\/40 { --tw-shadow-color: hsl(var(--accent-hue) 70% 60% / 0.4); }
+.shadow-indigo-900\/40 { --tw-shadow-color: hsl(var(--accent-hue) 70% 30% / 0.4); }
+.accent-indigo-500 { accent-color: hsl(var(--accent-hue) 70% 60%); }

@@ -8,6 +8,51 @@ const ThemeContext = createContext(null);
 export const DEFAULT_WALLPAPER = minecraftWallpaper;
 export const DEFAULT_BLUR = 3;
 
+function extractHue(imageUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = 24;
+        c.height = 24;
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return resolve(null);
+        ctx.drawImage(img, 0, 0, 24, 24);
+        const { data } = ctx.getImageData(0, 0, 24, 24);
+        let hueSum = 0;
+        let weightSum = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const l = (max + min) / 510;
+          if (l < 0.18 || l > 0.92) continue;
+          const d = max - min;
+          const sat = d === 0 ? 0 : d / (255 - Math.abs(2 * l * 255 - 255));
+          if (sat < 0.15) continue;
+          let h;
+          if (max === r) h = ((g - b) / d) % 6;
+          else if (max === g) h = (b - r) / d + 2;
+          else h = (r - g) / d + 4;
+          h = h * 60;
+          if (h < 0) h += 360;
+          const weight = sat * l;
+          hueSum += h * weight;
+          weightSum += weight;
+        }
+        resolve(weightSum === 0 ? null : (hueSum / weightSum) % 360);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = imageUrl;
+  });
+}
+
 export function ThemeProvider({ children }) {
   const [wallpaperUrl, setWallpaperUrlState] = useState(() => localStorage.getItem("reclaim-wallpaper") || DEFAULT_WALLPAPER);
   const [wallpaperBlur, setWallpaperBlurState] = useState(() => Number(localStorage.getItem("reclaim-blur")) || DEFAULT_BLUR);
@@ -19,6 +64,16 @@ export function ThemeProvider({ children }) {
     root.classList.add("dark");
     root.classList.remove("light");
   }, []);
+
+  // Match the accent color to the wallpaper's dominant hue
+  const applyAccentHue = useCallback(async (url) => {
+    const hue = await extractHue(url);
+    document.documentElement.style.setProperty("--accent-hue", hue == null ? "240" : String(hue.toFixed(0)));
+  }, []);
+
+  useEffect(() => {
+    applyAccentHue(wallpaperUrl);
+  }, [wallpaperUrl, applyAccentHue]);
 
   // Sync wallpaper from streak record on mount
   useEffect(() => {

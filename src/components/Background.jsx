@@ -12,7 +12,7 @@ export default function Background() {
             className="absolute inset-0 w-full h-full object-cover"
             style={{ filter: `blur(${wallpaperBlur}px)`, transform: `scale(${1 + wallpaperBlur / 50})` }}
           />
-          <div className="absolute inset-0 bg-black/30 dark:bg-black/30 light:bg-white/10" />
+          <div className="absolute inset-0 bg-black/40" />
         </>
       ) : (
         <div className="absolute inset-0">

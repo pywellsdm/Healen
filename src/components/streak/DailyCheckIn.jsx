@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/store";
+import { calculateStreakDays } from "@/lib/streakUtils";
 
 const MOODS = [
   { key: "great", label: "Great", emoji: "💪", color: "emerald" },
@@ -31,12 +32,19 @@ export default function DailyCheckIn({ streak, onCompleted }) {
         checkin_type: "daily",
       });
 
-      // Update streak — increment daily goal streak, set last check-in
+      // Update streak — increment counters only after the first full clean day
+      // (a check-in on the streak start day isn't a completed day yet)
       const newGoalStreak = (streak.daily_goal_streak || 0) + 1;
+      const newLongest = Math.max(streak.longest_streak_days || 0, newGoalStreak);
       await db.entities.Streak.update(streak.id, {
         last_checkin_date: today,
-        daily_goal_streak: newGoalStreak,
-        total_clean_days: (streak.total_clean_days || 0) + 1,
+        daily_goal_streak: calculateStreakDays(streak.streak_start_date) > 0 ? newGoalStreak : 0,
+        current_streak_days: calculateStreakDays(streak.streak_start_date),
+        longest_streak_days: calculateStreakDays(streak.streak_start_date) > 0 ? newLongest : streak.longest_streak_days,
+        total_clean_days:
+          calculateStreakDays(streak.streak_start_date) > 0
+            ? (streak.total_clean_days || 0) + 1
+            : streak.total_clean_days,
       });
 
       setDone(true);

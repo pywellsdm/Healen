@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
-import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress } from "@/lib/streakUtils";
-import { getNextMilestone } from "@/lib/milestones";
+import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, getNextGoal } from "@/lib/streakUtils";
+import { getNextMilestone, getRecentMilestone } from "@/lib/milestones";
 import StreakCounter from "@/components/streak/StreakCounter";
 import MotivationCard from "@/components/streak/MotivationCard";
 import DailyCheckIn from "@/components/streak/DailyCheckIn";
 import MilestoneTracker from "@/components/streak/MilestoneTracker";
 import RelapseModal from "@/components/streak/RelapseModal";
 import RelapseRecovery from "@/components/streak/RelapseRecovery";
+import Celebration from "@/components/Celebration";
 import { AlertTriangle, TrendingUp, Flame, Calendar, ChevronRight, Target } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { db } from "@/lib/store";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -18,21 +20,64 @@ export default function Dashboard() {
   const [recoveryData, setRecoveryData] = useState(null);
   const [currentDays, setCurrentDays] = useState(0);
   const [progressDays, setProgressDays] = useState(0);
+  const [celebration, setCelebration] = useState(null);
 
   const loadStreak = async () => {
     const s = await ensureStreakRecord();
-    setStreak(s);
-    setCurrentDays(calculateStreakDays(s.streak_start_date));
-    setProgressDays(calculateStreakProgress(s.streak_start_date));
-    return s;
+    const current = calculateStreakDays(s.streak_start_date);
+    const progress = calculateStreakProgress(s.streak_start_date);
+
+    // Self-heal: a check-in on the start day used to over-count Total/Best by 1
+    if (
+      current > 0 &&
+      (s.daily_goal_streak || 0) === (s.total_clean_days || 0) &&
+      (s.total_clean_days || 0) === current + 1
+    ) {
+      const fixedLongest =
+        (s.longest_streak_days || 0) === current + 1
+          ? current
+          : Math.max(s.longest_streak_days || 0, current);
+      await db.entities.Streak.update(s.id, {
+        daily_goal_streak: current,
+        total_clean_days: current,
+        longest_streak_days: fixedLongest,
+      });
+      s.daily_goal_streak = current;
+      s.total_clean_days = current;
+      s.longest_streak_days = fixedLongest;
+    }
+
+    let goalCelebration = null;
+    let updated = s;
+    if (progress >= (s.current_goal_days || 30)) {
+      const next = getNextGoal(s.current_goal_days || 30);
+      if (next !== (s.current_goal_days || 30)) {
+        updated = await db.entities.Streak.update(s.id, { current_goal_days: next });
+        goalCelebration = { type: "goal", day: Math.floor(progress), nextGoal: next };
+      }
+    }
+
+    let milestoneCelebration = null;
+    const recent = getRecentMilestone(current);
+    if (!goalCelebration && recent.days > (updated.last_awarded_milestone || 0)) {
+      await db.entities.Streak.update(updated.id, { last_awarded_milestone: recent.days });
+      milestoneCelebration = { type: "milestone", day: current, milestone: recent };
+    }
+
+    setStreak(updated);
+    setCurrentDays(current);
+    setProgressDays(progress);
+    return { streak: updated, celebration: goalCelebration || milestoneCelebration };
   };
 
   useEffect(() => {
     (async () => {
       try {
-        const s = await loadStreak();
-        if (s.onboarding_completed !== true) {
+        const res = await loadStreak();
+        if (res.streak.onboarding_completed !== true) {
           navigate("/onboarding", { replace: true });
+        } else if (res.celebration) {
+          setCelebration(res.celebration);
         }
       } catch (e) {
         console.error(e);
@@ -53,7 +98,13 @@ export default function Dashboard() {
   };
 
   const handleCheckInComplete = async () => {
-    await loadStreak();
+    const res = await loadStreak();
+    if (res.celebration) {
+      setCelebration(res.celebration);
+    } else {
+      const day = calculateStreakDays(res.streak.streak_start_date);
+      setCelebration({ type: "checkin", day });
+    }
   };
 
   if (loading) {
@@ -65,6 +116,7 @@ export default function Dashboard() {
   }
 
   const nextMilestone = getNextMilestone(currentDays);
+  const bestDays = Math.max(streak?.longest_streak_days || 0, currentDays);
 
   return (
     <div className="px-5 pt-12 pb-4">
@@ -93,7 +145,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-3 gap-2 mb-6">
         <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
           <TrendingUp className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-          <p className="text-lg font-bold text-white tabular-nums">{streak?.longest_streak_days || 0}</p>
+          <p className="text-lg font-bold text-white tabular-nums">{bestDays}</p>
           <p className="text-[10px] text-slate-500 uppercase tracking-wider">Best</p>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
@@ -174,6 +226,7 @@ export default function Dashboard() {
         onCompleted={handleRelapseComplete}
       />
       <RelapseRecovery data={recoveryData} onClose={handleRecoveryClose} />
+      <Celebration celebration={celebration} onClose={() => setCelebration(null)} />
     </div>
   );
 }

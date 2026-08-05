@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, AI_PROVIDERS } from "@/lib/store";
 import { buildAIContext, AI_PERSONAS } from "@/lib/aiContext";
-import { ensureStreakRecord } from "@/lib/streakUtils";
+import { ensureStreakRecord, calculateStreakDays } from "@/lib/streakUtils";
 import {
   Bot,
   Send,
@@ -216,6 +216,7 @@ export default function AICoach() {
 
   const providerName = AI_PROVIDERS[config.provider]?.name || "AI";
   const isWelcome = messages.length === 0 && !historyOpen;
+  const aiCurrentDays = calculateStreakDays(streak?.streak_start_date);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-120px)] px-5 pt-12 pb-2">
@@ -334,7 +335,7 @@ export default function AICoach() {
             <p className="text-sm text-slate-400 mt-1 max-w-xs">
               I'm your {AI_PERSONAS[persona].name}. I can see you're at{" "}
               <span className="text-indigo-300 font-medium">
-                {streak?.current_streak_days || 0} days clean
+                {aiCurrentDays} days clean
               </span>{" "}
               with a goal of {streak?.current_goal_days || 30}. What's on your mind?
             </p>

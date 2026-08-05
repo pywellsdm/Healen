@@ -3,6 +3,7 @@ import { X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TRIGGER_LABELS } from "@/lib/motivation";
 import { db } from "@/lib/store";
+import { calculateStreakDays } from "@/lib/streakUtils";
 
 const TRIGGERS = Object.keys(TRIGGER_LABELS);
 const MOODS = [
@@ -33,6 +34,7 @@ export default function RelapseModal({ open, onClose, streak, onCompleted }) {
     setSubmitting(true);
     try {
       const now = new Date().toISOString();
+      const daysLost = calculateStreakDays(streak?.streak_start_date);
       // Record the relapse
       await db.entities.Relapse.create({
         relapse_date: now,
@@ -40,11 +42,11 @@ export default function RelapseModal({ open, onClose, streak, onCompleted }) {
         mood,
         time_of_day: timeOfDay,
         notes,
-        streak_before_relapse: streak?.current_streak_days || 0,
+        streak_before_relapse: daysLost,
       });
 
       // Reset streak
-      const newLongest = Math.max(streak.longest_streak_days || 0, streak.current_streak_days || 0);
+      const newLongest = Math.max(streak.longest_streak_days || 0, daysLost);
       await db.entities.Streak.update(streak.id, {
         current_streak_days: 0,
         streak_start_date: now,
@@ -54,7 +56,7 @@ export default function RelapseModal({ open, onClose, streak, onCompleted }) {
         daily_goal_streak: 0,
       });
 
-      onCompleted({ trigger, mood, streakLost: streak.current_streak_days || 0 });
+      onCompleted({ trigger, mood, streakLost: daysLost });
     } catch (e) {
       console.error(e);
     } finally {
@@ -197,7 +199,7 @@ export default function RelapseModal({ open, onClose, streak, onCompleted }) {
               />
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-4">
                 <p className="text-xs text-amber-200/90 leading-relaxed">
-                  Your streak will reset to 0, but your {streak?.current_streak_days || 0} days aren't erased —
+                  Your streak will reset to 0, but your {calculateStreakDays(streak?.streak_start_date)} days aren't erased —
                   they're part of your {streak?.total_clean_days || 0}+ total clean days. This is data, not failure.
                 </p>
               </div>

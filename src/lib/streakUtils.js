@@ -27,23 +27,30 @@ export async function updateStreak(id, data) {
   return await db.entities.Streak.update(id, data);
 }
 
-// Calculate current streak days from start date
+export const GOAL_OPTIONS = [7, 14, 30, 45, 60, 90, 180, 365];
+
+// Move to the next goal in the ladder; stay put if already at the top
+export function getNextGoal(current) {
+  const i = GOAL_OPTIONS.indexOf(current);
+  if (i >= 0 && i < GOAL_OPTIONS.length - 1) return GOAL_OPTIONS[i + 1];
+  return current;
+}
+
+// Calculate current streak days from start date (full 24-hour periods elapsed).
+// A streak started at 8pm only reaches day 1 at 8pm the next day — never at midnight.
 export function calculateStreakDays(startDate) {
   if (!startDate) return 0;
-  const start = new Date(startDate);
-  const now = new Date();
-  const diffMs = now - start;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return Math.max(0, diffDays);
+  const start = new Date(startDate).getTime();
+  const elapsed = Math.max(0, Date.now() - start);
+  return Math.floor(elapsed / 86400000);
 }
 
 // Calculate streak as a fractional number of days (for progress bars)
 export function calculateStreakProgress(startDate) {
   if (!startDate) return 0;
-  const start = new Date(startDate);
-  const now = new Date();
-  const diffMs = now - start;
-  return Math.max(0, diffMs / (1000 * 60 * 60 * 24));
+  const start = new Date(startDate).getTime();
+  const elapsed = Math.max(0, Date.now() - start);
+  return elapsed / 86400000;
 }
 
 // Format a remaining time (in days, possibly fractional) as "Xd Yh" / "Yh Zm"
@@ -59,18 +66,17 @@ export function formatRemaining(days) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-// Get the time breakdown for display
+// Get the time breakdown for display (counts up from the exact streak start,
+// so a fresh relapse shows 00:00 and the clock matches "time since I gooned")
 export function getStreakBreakdown(startDate) {
   if (!startDate) return { days: 0, hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 };
-  const start = new Date(startDate);
-  const now = new Date();
-  let diff = Math.floor((now - start) / 1000);
-  if (diff < 0) diff = 0;
-  const days = Math.floor(diff / 86400);
-  const hours = Math.floor((diff % 86400) / 3600);
-  const minutes = Math.floor((diff % 3600) / 60);
-  const seconds = diff % 60;
-  return { days, hours, minutes, seconds, totalSeconds: diff };
+  const elapsed = Math.max(0, Date.now() - new Date(startDate).getTime());
+  const days = Math.floor(elapsed / 86400000);
+  const msRemainder = elapsed - days * 86400000;
+  const hours = Math.floor(msRemainder / 3600000);
+  const minutes = Math.floor((msRemainder % 3600000) / 60000);
+  const seconds = Math.floor((msRemainder % 60000) / 1000);
+  return { days, hours, minutes, seconds, totalSeconds: Math.floor(elapsed / 1000) };
 }
 
 export function formatDate(dateStr) {

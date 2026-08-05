@@ -9,12 +9,11 @@ export default function MotivationCard({ tone = "gentle", type = "daily", custom
   }, [tone, type, customText]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950/60 to-purple-950/40 border border-indigo-500/20 p-5">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl" />
+    <div className="relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 p-5 backdrop-blur-2xl">
       <div className="relative">
         <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-indigo-300" />
-          <span className="text-xs uppercase tracking-wider text-indigo-300/80 font-semibold">
+          <Sparkles className="w-4 h-4 text-slate-300" />
+          <span className="text-xs uppercase tracking-wider text-slate-300/80 font-semibold">
             {type === "relapse" ? "Get Back Up" : type === "panic" ? "Stay Strong" : "Daily Fuel"}
           </span>
         </div>
