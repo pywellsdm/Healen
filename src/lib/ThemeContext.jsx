@@ -61,6 +61,7 @@ function extractHue(imageUrl) {
 export function ThemeProvider({ children }) {
   const [wallpaperUrl, setWallpaperUrlState] = useState(() => localStorage.getItem("reclaim-wallpaper") || DEFAULT_WALLPAPER);
   const [wallpaperBlur, setWallpaperBlurState] = useState(() => Number(localStorage.getItem("reclaim-blur")) || DEFAULT_BLUR);
+  const [themeColor, setThemeColorState] = useState(() => localStorage.getItem("reclaim-theme-color") || "auto");
   const [streakId, setStreakId] = useState(null);
 
   // Dark mode only — always apply the dark class
@@ -70,15 +71,21 @@ export function ThemeProvider({ children }) {
     root.classList.remove("light");
   }, []);
 
-  // Match the accent color to the wallpaper's dominant hue
+  // Match the accent color to the wallpaper's dominant hue,
+  // unless the user picked a manual theme color.
   const applyAccentHue = useCallback(async (url) => {
+    const manual = localStorage.getItem("reclaim-theme-color");
+    if (manual && manual !== "auto") {
+      document.documentElement.style.setProperty("--accent-hue", manual);
+      return;
+    }
     const hue = await extractHue(url);
     document.documentElement.style.setProperty("--accent-hue", hue == null ? "240" : String(hue.toFixed(0)));
   }, []);
 
   useEffect(() => {
     applyAccentHue(wallpaperUrl);
-  }, [wallpaperUrl, applyAccentHue]);
+  }, [wallpaperUrl, themeColor, applyAccentHue]);
 
   // Sync wallpaper from streak record on mount
   useEffect(() => {
@@ -149,10 +156,20 @@ export function ThemeProvider({ children }) {
     }
   }, [streakId]);
 
+  const setThemeColor = useCallback((color) => {
+    setThemeColorState(color || "auto");
+    if (!color || color === "auto") {
+      localStorage.removeItem("reclaim-theme-color");
+    } else {
+      localStorage.setItem("reclaim-theme-color", String(color));
+    }
+  }, []);
+
   return (
     <ThemeContext.Provider value={{
       wallpaperUrl, setWallpaper, resetWallpaper,
       wallpaperBlur, setBlur,
+      themeColor, setThemeColor,
       hasCustomWallpaper: !!localStorage.getItem("reclaim-wallpaper"),
     }}>
       {children}
@@ -169,6 +186,8 @@ export function useTheme() {
       resetWallpaper: () => {},
       wallpaperBlur: DEFAULT_BLUR,
       setBlur: () => {},
+      themeColor: "auto",
+      setThemeColor: () => {},
       hasCustomWallpaper: false,
     };
   }
