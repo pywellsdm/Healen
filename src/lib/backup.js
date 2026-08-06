@@ -42,6 +42,7 @@ async function b64Decode(b64) {
 }
 
 export const BACKUP_MAGIC = "HEALEN-BACKUP-1";
+const LEGACY_MAGIC = "UNGOONIFY-BACKUP-1";
 
 export async function exportBackup() {
   const data = {};
@@ -67,7 +68,7 @@ export async function importBackup(code) {
   }
   const nl = payload.indexOf("\n");
   const magic = payload.slice(0, nl);
-  if (magic !== BACKUP_MAGIC && magic !== "HEALEN-BACKUP-1") {
+  if (magic !== BACKUP_MAGIC && magic !== "HEALEN-BACKUP-1" && magic !== LEGACY_MAGIC) {
     throw new Error("Not a valid Healen backup.");
   }
   const data = JSON.parse(payload.slice(nl + 1));
