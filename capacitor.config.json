@@ -1,6 +1,6 @@
 {
-  "appId": "com.ungoonify.app",
-  "appName": "UnGoonify",
+  "appId": "com.healen.app",
+  "appName": "Healen",
   "webDir": "dist",
   "android": {
     "allowMixedContent": true

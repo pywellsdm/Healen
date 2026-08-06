@@ -8,6 +8,7 @@ import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Layout from '@/components/Layout';
 import { ThemeProvider } from '@/lib/ThemeContext';
+import { ModeProvider } from '@/lib/ModeContext';
 import Dashboard from '@/pages/Dashboard';
 import PanicMode from '@/pages/PanicMode';
 import Statistics from '@/pages/Statistics';
@@ -19,6 +20,7 @@ import { Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import SplashScreen from '@/components/SplashScreen';
 import Onboarding from '@/pages/Onboarding';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated: isAuthed } = useAuth();
@@ -63,17 +65,21 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <ThemeProvider>
-          <Router>
-            <ScrollToTop />
-            <AuthenticatedApp />
-          </Router>
-          <Toaster />
-        </ThemeProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <ThemeProvider>
+            <ModeProvider>
+              <Router>
+                <ScrollToTop />
+                <AuthenticatedApp />
+              </Router>
+              <Toaster />
+            </ModeProvider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

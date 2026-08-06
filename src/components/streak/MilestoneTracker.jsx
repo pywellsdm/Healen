@@ -4,17 +4,19 @@ import { MILESTONES, TIER_COLORS, getProgressToNext, getNextMilestone } from "@/
 import { formatRemaining } from "@/lib/streakUtils";
 import {
   Sparkles, Sun, Leaf, Flame, Shield, Zap, Crown, Brain, Trophy, Gem, Award,
+  Moon, CloudMoon, Stars, BedDouble, Clock, HeartPulse, Bed,
 } from "lucide-react";
 
 const ICON_MAP = {
   Sparkles, Sun, Leaf, Flame, Shield, Zap, Crown, Brain, Trophy, Gem, Award,
+  Moon, CloudMoon, Stars, BedDouble, Clock, HeartPulse, Bed,
 };
 
-export default function MilestoneTracker({ currentDays, progressDays }) {
+export default function MilestoneTracker({ currentDays, progressDays, list = MILESTONES }) {
   const days = typeof progressDays === "number" ? progressDays : currentDays;
-  const next = getNextMilestone(days);
-  const progress = getProgressToNext(days);
-  const recent = [...MILESTONES].reverse().find((m) => m.days <= days) || MILESTONES[0];
+  const next = getNextMilestone(days, list);
+  const progress = getProgressToNext(days, list);
+  const recent = [...list].reverse().find((m) => m.days <= days) || list[0];
   const remaining = Math.max(next.days - days, 0);
 
   return (
@@ -56,7 +58,7 @@ export default function MilestoneTracker({ currentDays, progressDays }) {
 
       {/* Milestone list */}
       <div className="space-y-2">
-        {MILESTONES.map((m) => {
+        {list.map((m) => {
           const achieved = days >= m.days;
           const tier = TIER_COLORS[m.tier];
           const Icon = ICON_MAP[m.icon] || Star;

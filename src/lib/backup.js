@@ -1,4 +1,4 @@
-const PREFIXES = ["quit-gooning:", "reclaim-", "ungoonify-"];
+const PREFIXES = ["quit-gooning:", "reclaim-", "ungoonify-", "healen:"];
 
 function inScope(key) {
   return PREFIXES.some((p) => key.startsWith(p));
@@ -41,7 +41,7 @@ async function b64Decode(b64) {
   return new TextDecoder().decode(bytes);
 }
 
-export const BACKUP_MAGIC = "UNGOONIFY-BACKUP-1";
+export const BACKUP_MAGIC = "HEALEN-BACKUP-1";
 
 export async function exportBackup() {
   const data = {};
@@ -67,8 +67,8 @@ export async function importBackup(code) {
   }
   const nl = payload.indexOf("\n");
   const magic = payload.slice(0, nl);
-  if (magic !== BACKUP_MAGIC) {
-    throw new Error("Not a valid UnGoonify backup.");
+  if (magic !== BACKUP_MAGIC && magic !== "HEALEN-BACKUP-1") {
+    throw new Error("Not a valid Healen backup.");
   }
   const data = JSON.parse(payload.slice(nl + 1));
   if (!data || typeof data !== "object") {

@@ -1,20 +1,31 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/store";
-import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, formatDate } from "@/lib/streakUtils";
+import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, formatDate, formatDuration } from "@/lib/streakUtils";
 import MilestoneTracker from "@/components/streak/MilestoneTracker";
 import { TRIGGER_LABELS, MOOD_EMOJI } from "@/lib/motivation";
+import { SLEEP_MILESTONES } from "@/lib/milestones";
+import { useMode } from "@/lib/ModeContext";
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell,
   LineChart, Line, CartesianGrid,
 } from "recharts";
-import { TrendingUp, Calendar, Target, Flame, Award, Activity } from "lucide-react";
+import { TrendingUp, Calendar, Target, Flame, Award, Activity, Moon, AlertTriangle } from "lucide-react";
 
 const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#ec4899", "#f43f5e", "#f59e0b", "#10b981", "#06b6d4", "#3b82f6"];
 
+const SLEEP_STATUS_COLORS = {
+  success: "#818cf8",
+  short: "#f59e0b",
+  overslept: "#fb7185",
+};
+
 export default function Statistics() {
+  const { mode } = useMode();
+  const sleeping = mode === "sleeping";
   const [streak, setStreak] = useState(null);
   const [checkIns, setCheckIns] = useState([]);
   const [relapses, setRelapses] = useState([]);
+  const [sleeps, setSleeps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
 
@@ -23,12 +34,14 @@ export default function Statistics() {
       try {
         const s = await ensureStreakRecord();
         setStreak(s);
-        const [ci, rel] = await Promise.all([
+        const [ci, rel, sl] = await Promise.all([
           db.entities.CheckIn.filter({}, "-checkin_date", 200),
           db.entities.Relapse.filter({}, "-relapse_date", 200),
+          db.entities.Sleep.filter({}, "-start_date", 400),
         ]);
         setCheckIns(ci || []);
         setRelapses(rel || []);
+        setSleeps(sl || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -93,6 +106,32 @@ export default function Statistics() {
     ? Math.round(((streak?.total_clean_days || 0) / ((streak?.total_clean_days || 0) + relapses.length)) * 100)
     : 100;
 
+  // ---------------- Sleep stats ----------------
+  const sleepDays = streak?.sleep_current_streak_days || 0;
+  const sleepBest = Math.max(streak?.sleep_longest_streak_days || 0, sleepDays);
+  const sleepEntries = [...sleeps].sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+  const sleepSuccess = sleepEntries.filter((s) => s.status === "success");
+  const avgSleepMin = sleepEntries.length > 0
+    ? Math.round(sleepEntries.reduce((sum, s) => sum + (s.duration_min || 0), 0) / sleepEntries.length)
+    : 0;
+  const sleepSuccessRate = sleepEntries.length > 0
+    ? Math.round((sleepSuccess.length / sleepEntries.length) * 100)
+    : 100;
+  const sleepChart = sleepEntries.slice(-14).map((s, i) => ({
+    day: `${i + 1}`,
+    hours: Math.round(((s.duration_min || 0) / 60) * 10) / 10,
+    color: SLEEP_STATUS_COLORS[s.status] || "#818cf8",
+    status: s.status,
+  }));
+  const sleepStats = [
+    { icon: Moon, label: "Current Streak", value: sleepDays, unit: "night", color: "text-indigo-400" },
+    { icon: Award, label: "Longest Streak", value: sleepBest, unit: "night", color: "text-yellow-400" },
+    { icon: Calendar, label: "Total Nights", value: streak?.sleep_total_nights || 0, unit: "night", color: "text-emerald-400" },
+    { icon: Activity, label: "Avg Duration", value: avgSleepMin > 0 ? formatDuration(avgSleepMin) : "—", unit: "", color: "text-cyan-400" },
+    { icon: TrendingUp, label: "Success Rate", value: sleepSuccessRate, unit: "%", color: "text-indigo-300" },
+    { icon: AlertTriangle, label: "Missed Nights", value: streak?.sleep_total_resets || 0, unit: "", color: "text-rose-400" },
+  ];
+
   const stats = [
     { icon: Flame, label: "Current Streak", value: currentDays, unit: "days", color: "text-orange-400" },
     { icon: Award, label: "Longest Streak", value: bestDays, unit: "days", color: "text-yellow-400" },
@@ -104,8 +143,12 @@ export default function Statistics() {
 
   return (
     <div className="px-5 pt-12 pb-4">
-      <h1 className="text-xl font-bold text-white mb-1">Your Statistics</h1>
-      <p className="text-xs text-slate-500 mb-6">Every data point is a story of resilience.</p>
+      <h1 className="text-xl font-bold text-white mb-1">
+        {sleeping ? "Your Sleep Statistics" : "Your Statistics"}
+      </h1>
+      <p className="text-xs text-slate-500 mb-6">
+        {sleeping ? "Every night of rest is a win for your health." : "Every data point is a story of resilience."}
+      </p>
 
       {/* Tab selector */}
       <div className="flex gap-1 bg-white/5 border border-white/10 rounded-xl p-1 mb-6">
@@ -126,6 +169,102 @@ export default function Statistics() {
         ))}
       </div>
 
+      {sleeping ? (
+        tab === "overview" ? (
+          <>
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {sleepStats.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                    <Icon className={`w-5 h-5 ${s.color} mb-2`} />
+                    <p className="text-2xl font-bold text-white tabular-nums">
+                      {s.value}<span className="text-sm text-slate-500 ml-1">{s.unit}</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">{s.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Sleep duration chart */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+              <p className="text-sm font-semibold text-white mb-1">Sleep Duration — Last {sleepChart.length} Nights</p>
+              <p className="text-xs text-slate-500 mb-4">
+                Indigo = 7-9h · Amber = under 7h · Rose = over 9h
+              </p>
+              {sleepEntries.length === 0 ? (
+                <div className="text-center py-10">
+                  <Moon className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                  <p className="text-xs text-slate-500">Start a sleep session from the Home tab to see your progress.</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={sleepChart}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="day" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} interval={0} />
+                    <YAxis domain={[0, 10]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={20} />
+                    <Tooltip
+                      contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                      labelStyle={{ color: "#94a3b8" }}
+                      cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                      formatter={(value, _name, item) => [`${value}h`, item.payload.status === "success" ? "Good sleep" : item.payload.status === "short" ? "Too short" : "Overslept"]}
+                    />
+                    <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
+                      {sleepChart.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </>
+        ) : tab === "milestones" ? (
+          <MilestoneTracker currentDays={sleepDays} progressDays={sleepDays} list={SLEEP_MILESTONES} />
+        ) : (
+          <div className="space-y-3">
+            {sleepEntries.length === 0 ? (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                <Moon className="w-12 h-12 text-indigo-400 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-white">No sleep sessions yet</p>
+                <p className="text-xs text-slate-500 mt-1">Your sleep log will appear here after your first night.</p>
+              </div>
+            ) : (
+              [...sleeps]
+                .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
+                .map((s) => (
+                  <div key={s.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-white">{formatDate(s.start_date)}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {s.start_date ? new Date(s.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                          {" – "}
+                          {s.end_date ? new Date(s.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-white">{formatDuration(s.duration_min || 0)}</p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          s.status === "success"
+                            ? "bg-emerald-500/10 text-emerald-400"
+                            : s.status === "short"
+                              ? "bg-amber-500/10 text-amber-400"
+                              : "bg-rose-500/10 text-rose-400"
+                        }`}>
+                          {s.status === "success" ? "Good sleep" : s.status === "short" ? "Too short" : "Overslept"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
+        )
+      ) : (
+        <>
       {tab === "overview" && (
         <>
           {/* Stat cards */}
@@ -211,44 +350,46 @@ export default function Statistics() {
         </>
       )}
 
-      {tab === "milestones" && (
-        <MilestoneTracker currentDays={currentDays} progressDays={progressDays} />
-      )}
+          {tab === "milestones" && (
+            <MilestoneTracker currentDays={currentDays} progressDays={progressDays} />
+          )}
 
-      {tab === "history" && (
-        <div className="space-y-3">
-          {relapses.length === 0 ? (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-              <Award className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-white">No resets recorded</p>
-              <p className="text-xs text-slate-500 mt-1">Your record is clean. Keep it going.</p>
-            </div>
-          ) : (
-            relapses.sort((a, b) => new Date(b.relapse_date ?? 0) - new Date(a.relapse_date ?? 0)).map((r) => (
-              <div key={r.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{MOOD_EMOJI[r.mood] || "⚪"}</span>
-                    <div>
-                      <p className="text-sm font-medium text-white">{formatDate(r.relapse_date)}</p>
-                      <p className="text-[10px] text-slate-500 capitalize">{r.time_of_day}</p>
+          {tab === "history" && (
+            <div className="space-y-3">
+              {relapses.length === 0 ? (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                  <Award className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-white">No resets recorded</p>
+                  <p className="text-xs text-slate-500 mt-1">Your record is clean. Keep it going.</p>
+                </div>
+              ) : (
+                relapses.sort((a, b) => new Date(b.relapse_date ?? 0).getTime() - new Date(a.relapse_date ?? 0).getTime()).map((r) => (
+                  <div key={r.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{MOOD_EMOJI[r.mood] || "⚪"}</span>
+                        <div>
+                          <p className="text-sm font-medium text-white">{formatDate(r.relapse_date)}</p>
+                          <p className="text-[10px] text-slate-500 capitalize">{r.time_of_day}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Lost</p>
+                        <p className="text-sm font-bold text-rose-400">{r.streak_before_relapse}d</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
+                        {TRIGGER_LABELS[r.trigger] || r.trigger}
+                      </span>
+                      {r.notes && <span className="text-[10px] text-slate-500 truncate">"{r.notes}"</span>}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500">Lost</p>
-                    <p className="text-sm font-bold text-rose-400">{r.streak_before_relapse}d</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-slate-400">
-                    {TRIGGER_LABELS[r.trigger] || r.trigger}
-                  </span>
-                  {r.notes && <span className="text-[10px] text-slate-500 truncate">"{r.notes}"</span>}
-                </div>
-              </div>
-            ))
+                ))
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

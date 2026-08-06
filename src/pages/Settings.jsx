@@ -47,7 +47,6 @@ export default function Settings() {
   const { wallpaperUrl, setWallpaper, resetWallpaper, wallpaperBlur, setBlur, themeColor, setThemeColor, hasCustomWallpaper } = useTheme();
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [aiPersona, setAiPersona] = useState("mentor");
   const [customPrompt, setCustomPrompt] = useState("");
@@ -166,10 +165,25 @@ export default function Settings() {
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  const handleSave = async (data) => {
     try {
-      const updated = await updateStreak(streak.id, {
+      const updated = await updateStreak(streak.id, data);
+      setStreak(updated);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Auto-save: settings persist automatically as you change them
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!streak) return;
+    if (!hydratedRef.current) {
+      hydratedRef.current = true;
+      return;
+    }
+    const t = setTimeout(() => {
+      handleSave({
         user_name: name,
         motivation_tone: tone,
         current_goal_days: goal,
@@ -177,13 +191,9 @@ export default function Settings() {
         daily_reminder_time: reminderTime,
         custom_motivation: customMotivation,
       });
-      setStreak(updated);
-    } catch (e) {
-      toast({ title: "Error", description: "Could not save settings.", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
+    }, 400);
+    return () => clearTimeout(t);
+  }, [name, tone, goal, reminderEnabled, reminderTime, customMotivation]);
 
   if (loading) {
     return (
@@ -669,10 +679,10 @@ export default function Settings() {
               return;
             }
             try {
-              if (navigator.canShare?.({ files: [new File([blob], "ungoonify.backup", { type: "application/octet-stream" })] })) {
+              if (navigator.canShare?.({ files: [new File([blob], "healen.backup", { type: "application/octet-stream" })] })) {
                 await navigator.share({
-                  files: [new File([blob], "ungoonify.backup", { type: "application/octet-stream" })],
-                  title: "UnGoonify backup",
+                  files: [new File([blob], "healen.backup", { type: "application/octet-stream" })],
+                  title: "Healen backup",
                 });
               }
             } catch {
@@ -719,7 +729,7 @@ export default function Settings() {
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
-                  a.download = `ungoonify-backup-${new Date().toISOString().slice(0, 10)}.backup`;
+                  a.download = `healen-backup-${new Date().toISOString().slice(0, 10)}.backup`;
                   a.click();
                   URL.revokeObjectURL(url);
                 }}
@@ -768,7 +778,7 @@ export default function Settings() {
             <input
               ref={restoreRef}
               type="file"
-              accept=".backup,.ungoonify,application/octet-stream,application/json"
+              accept=".backup,.healen,application/octet-stream,application/json"
               className="hidden"
               onChange={async (e) => {
                 const f = e.target.files?.[0];
@@ -791,24 +801,15 @@ export default function Settings() {
         {restoreMsg && <p className={cn("text-[11px] mt-2", restoreMsg.startsWith("Restore failed") ? "text-rose-400/80" : "text-emerald-400/80")}>{restoreMsg}</p>}
       </Section>
 
-      {/* Save button */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full mt-4 py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-      >
-        <Save className="w-4 h-4" />
-        {saving ? "Saving..." : "Save Settings"}
-      </button>
-
       {/* Danger zone */}
       <div className="mt-6 mb-4">
         <button
           onClick={async () => {
-            if (!confirm("This will permanently delete ALL your data — streak, check-ins, relapse history. This cannot be undone. Are you sure?")) return;
+            if (!confirm("This will permanently delete ALL your data — streak, check-ins, relapse history, sleep log. This cannot be undone. Are you sure?")) return;
             try {
               await db.entities.CheckIn.deleteMany({});
               await db.entities.Relapse.deleteMany({});
+              await db.entities.Sleep.deleteMany({});
               await db.entities.Streak.update(streak.id, {
                 current_streak_days: 0,
                 longest_streak_days: 0,
@@ -817,6 +818,13 @@ export default function Settings() {
                 total_relapses: 0,
                 daily_goal_streak: 0,
                 last_checkin_date: null,
+                sleep_session_start: null,
+                sleep_current_streak_days: 0,
+                sleep_longest_streak_days: 0,
+                sleep_total_nights: 0,
+                sleep_total_resets: 0,
+                sleep_last_success_date: null,
+                sleep_last_duration_min: null,
               });
               setResetMsg("All data reset. Fresh start — make it count.");
               setTimeout(() => setResetMsg(""), 3000);
@@ -837,8 +845,8 @@ export default function Settings() {
       {/* Support */}
       <Section icon={Heart} title="Support the Project">
         <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-          UnGoonify is free, private and made with care. If it's helped you, a small
-          donation keeps it alive and helps everyone else quit too. Thank you. 💜
+          Healen is free, private and made with care. If it's helped you, a small
+          donation keeps it alive and helps everyone else heal too. Thank you. 💜
         </p>
 
         <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
@@ -876,7 +884,7 @@ export default function Settings() {
 
       <p className="text-center text-[10px] text-slate-600 mt-4 leading-relaxed">
         100% private — your data lives only on this device. 💜<br />
-        Built so everyone can quit. You're not alone in this fight.
+        Built so everyone can heal. You're not alone in this journey.
       </p>
     </div>
   );

@@ -91,6 +91,8 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     (async () => {
       try {
+        // No profile yet (e.g. Welcome page) — nothing to sync
+        if (!localStorage.getItem("quit-gooning:profile")) return;
         const s = await ensureStreakRecord();
         setStreakId(s.id);
         if (s.wallpaper_url) {

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { importBackup } from "@/lib/backup";
 import { Sparkles, FileUp } from "lucide-react";
+import logo from "@/assets/healen-logo.png";
 import Background from "@/components/Background";
 
 export default function Welcome() {
@@ -32,12 +33,14 @@ export default function Welcome() {
     <div className="min-h-screen relative" style={{ background: "var(--app-bg)", color: "var(--text-primary)" }}>
       <Background />
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6 py-10">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-900/40 mb-4">
-          <Sparkles className="w-8 h-8 text-white" />
-        </div>
-        <h1 className="text-2xl font-bold text-white mb-1">Welcome to UnGoonify</h1>
+        <img
+          src={logo}
+          alt="Healen"
+          className="w-16 h-16 rounded-2xl shadow-lg shadow-indigo-900/40 object-cover mb-4"
+        />
+        <h1 className="text-2xl font-bold text-white mb-1">Welcome to Healen</h1>
         <p className="text-xs text-slate-400 mb-8 text-center leading-relaxed">
-          Your recovery, 100% on your device.<br />No account. No cloud. No tracking.
+          Your recovery and sleep, 100% on your device.<br />No account. No cloud. No tracking.
         </p>
 
         <div className="w-full max-w-sm space-y-3">

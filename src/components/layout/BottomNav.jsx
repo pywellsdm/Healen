@@ -1,18 +1,23 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, BarChart3, Settings, Shield, Users, Bot } from "lucide-react";
+import { Home, BarChart3, Settings, Shield, Moon, Users, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const NAV_ITEMS = [
-  { to: "/", label: "Home", icon: Home },
-  { to: "/statistics", label: "Stats", icon: BarChart3 },
-  { to: "/panic", label: "Panic", icon: Shield, highlight: true },
-  { to: "/community", label: "Tribe", icon: Users },
-  { to: "/ai-coach", label: "AI", icon: Bot },
-  { to: "/settings", label: "Settings", icon: Settings },
-];
+import { useMode } from "@/lib/ModeContext";
 
 export default function BottomNav() {
   const location = useLocation();
+  const { mode } = useMode();
+  const sleeping = mode === "sleeping";
+  const panicLabel = sleeping ? "Sleep" : "Panic";
+  const PanicIcon = sleeping ? Moon : Shield;
+
+  const NAV_ITEMS = [
+    { to: "/", label: "Home", icon: Home },
+    { to: "/statistics", label: "Stats", icon: BarChart3 },
+    { to: "/panic", label: panicLabel, icon: PanicIcon, highlight: true },
+    { to: "/community", label: "Tribe", icon: Users },
+    { to: "/ai-coach", label: "AI", icon: Bot },
+    { to: "/settings", label: "Settings", icon: Settings },
+  ];
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 px-3 pb-3 pt-2">
@@ -32,7 +37,7 @@ export default function BottomNav() {
                 )}
               >
                 <Icon className="w-[18px] h-[18px]" strokeWidth={isActive ? 2.5 : 2} />
-                <span className="text-[9px] font-medium">Panic</span>
+                <span className="text-[9px] font-medium">{item.label}</span>
               </Link>
             );
           }

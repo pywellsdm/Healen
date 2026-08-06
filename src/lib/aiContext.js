@@ -3,6 +3,13 @@ import { db } from "@/lib/store";
 import { ensureStreakRecord, calculateStreakDays } from "@/lib/streakUtils";
 import { TRIGGER_LABELS, MOOD_LABELS } from "@/lib/motivation";
 
+export const SLEEP_PLAN_LABELS = {
+  under6: "under 6 hours",
+  six_seven: "6–7 hours",
+  seven_eight: "7–8 hours",
+  eight_nine: "8–9 hours",
+};
+
 export async function buildAIContext() {
   const streak = await ensureStreakRecord();
   const currentDays = calculateStreakDays(streak.streak_start_date);
@@ -40,7 +47,12 @@ export async function buildAIContext() {
 - User name: ${streak.user_name || "friend"}
 - Gender: ${streak.gender || "not specified"}
 - Age: ${streak.age || "not specified"}
-- Times tried quitting: ${streak.times_tried || "not specified"}
+- Gooning quit attempts: ${streak.gooning_attempts || "not specified"}
+- Sleep plan (hours per night): ${SLEEP_PLAN_LABELS[streak.sleep_plan] || streak.sleep_plan || "not specified"}
+- Sleep streak: ${streak.sleep_current_streak_days || 0} nights
+- Best sleep streak: ${streak.sleep_longest_streak_days || 0} nights
+- Total nights slept: ${streak.sleep_total_nights || 0}
+- Sleep resets: ${streak.sleep_total_resets || 0}
 - Daily check-in streak: ${streak.daily_goal_streak || 0}
 
 RECENT CHECK-INS (last 7):

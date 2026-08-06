@@ -9,14 +9,24 @@ import Background from "@/components/Background";
 const EASE = [0.22, 1, 0.36, 1];
 
 const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say"];
-const ATTEMPTS = ["Never tried", "1–2 times", "3–5 times", "Lost count"];
-const GOALS = [7, 14, 30, 45, 60, 90, 180, 365];
+const QUIT_ATTEMPTS = [
+  { key: "never", label: "Never tried", desc: "This will be your first serious attempt" },
+  { key: "one_two", label: "1–2 times", desc: "You've dipped your toes in before" },
+  { key: "three_five", label: "3–5 times", desc: "You keep coming back stronger" },
+  { key: "lost", label: "Lost count", desc: "Every attempt taught you something" },
+];
+const SLEEP_HOURS = [
+  { key: "under6", label: "Under 6 hours", desc: "You're running on empty" },
+  { key: "six_seven", label: "6–7 hours", desc: "Close, but not quite enough" },
+  { key: "seven_eight", label: "7–8 hours", desc: "Right in the healthy zone" },
+  { key: "eight_nine", label: "8–9 hours", desc: "Solid, restful nights" },
+];
 
 const STEPS = [
   { key: "gender", title: "Let's personalize your journey", sub: "First, a few quick questions to build your plan." },
   { key: "age", title: "How old are you?", sub: "This helps us tailor the right advice for you." },
-  { key: "attempts", title: "How many times have you tried quitting?", sub: "Every attempt counts — it's all part of the path." },
-  { key: "goal", title: "What's your goal streak?", sub: "We'll help you get there, one day at a time." },
+  { key: "attempts", title: "How many times have you tried quitting gooning?", sub: "Every attempt counts — it's all part of the path." },
+  { key: "sleep", title: "What's your sleep plan?", sub: "How many hours do you usually get a night?" },
 ];
 
 export default function Onboarding() {
@@ -25,8 +35,9 @@ export default function Onboarding() {
   const [gender, setGender] = useState("");
   const [age, setAge] = useState("");
   const [attempts, setAttempts] = useState("");
-  const [goal, setGoal] = useState(30);
+  const [sleepHours, setSleepHours] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const current = STEPS[step];
 
@@ -34,6 +45,7 @@ export default function Onboarding() {
     if (current.key === "gender") return !!gender;
     if (current.key === "age") return /^\d{1,3}$/.test(age.trim());
     if (current.key === "attempts") return !!attempts;
+    if (current.key === "sleep") return !!sleepHours;
     return true;
   };
 
@@ -43,19 +55,23 @@ export default function Onboarding() {
   };
 
   const finish = async () => {
+    if (saving) return;
     setSaving(true);
+    setSaveError("");
     try {
       const s = await ensureStreakRecord();
       await updateStreak(s.id, {
         gender,
         age: parseInt(age, 10) || null,
-        times_tried: attempts,
-        current_goal_days: goal,
+        gooning_attempts: attempts,
+        sleep_plan: sleepHours,
+        current_goal_days: 30,
         onboarding_completed: true,
       });
       navigate("/", { replace: true });
     } catch (e) {
       console.error(e);
+      setSaveError("Couldn't save your answers. Please try again.");
       setSaving(false);
     }
   };
@@ -77,7 +93,7 @@ export default function Onboarding() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-500 shadow-lg shadow-indigo-500/40 mb-4">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
-          <p className="text-[11px] uppercase tracking-[0.35em] text-indigo-300/80 mb-2">UnGoonify</p>
+          <p className="text-[11px] uppercase tracking-[0.35em] text-indigo-300/80 mb-2">Healen</p>
           <AnimatePresence mode="wait">
             <motion.div key={current.key}>
               <motion.h1
@@ -145,43 +161,47 @@ export default function Onboarding() {
 
               {current.key === "attempts" && (
                 <div className="space-y-2">
-                  {ATTEMPTS.map((a) => (
+                  {QUIT_ATTEMPTS.map((o) => (
                     <button
-                      key={a}
-                      onClick={() => setAttempts(a)}
+                      key={o.key}
+                      onClick={() => setAttempts(o.key)}
                       className={cn(
                         "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left",
-                        attempts === a ? "bg-indigo-500/15 border-indigo-400/40" : "bg-white/5 border-white/5"
+                        attempts === o.key ? "bg-indigo-500/15 border-indigo-400/40" : "bg-white/5 border-white/5"
                       )}
                     >
-                      <span className={cn("text-sm font-medium", attempts === a ? "text-indigo-200" : "text-slate-300")}>{a}</span>
-                      <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center", attempts === a ? "border-indigo-400 bg-indigo-500/30" : "border-white/20")}>
-                        {attempts === a && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
+                      <span>
+                        <span className={cn("block text-sm font-medium", attempts === o.key ? "text-indigo-200" : "text-slate-300")}>{o.label}</span>
+                        <span className="block text-[11px] text-slate-500 mt-0.5">{o.desc}</span>
+                      </span>
+                      <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0", attempts === o.key ? "border-indigo-400 bg-indigo-500/30" : "border-white/20")}>
+                        {attempts === o.key && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
                       </span>
                     </button>
                   ))}
                 </div>
               )}
 
-              {current.key === "goal" && (
-                <div>
-                  <div className="grid grid-cols-4 gap-2 mb-3">
-                    {GOALS.map((g) => (
-                      <button
-                        key={g}
-                        onClick={() => setGoal(g)}
-                        className={cn(
-                          "py-3 rounded-xl text-sm font-bold border transition-all",
-                          goal === g ? "bg-indigo-500/20 border-indigo-400/50 text-indigo-200" : "bg-white/5 border-white/5 text-slate-400"
-                        )}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-center text-[11px] text-slate-500">
-                    {goal === 90 ? "90 days — the full brain rewiring milestone." : goal === 30 ? "Survive the hardest month." : `${goal} days of mastery.`}
-                  </p>
+              {current.key === "sleep" && (
+                <div className="space-y-2">
+                  {SLEEP_HOURS.map((o) => (
+                    <button
+                      key={o.key}
+                      onClick={() => setSleepHours(o.key)}
+                      className={cn(
+                        "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left",
+                        sleepHours === o.key ? "bg-indigo-500/15 border-indigo-400/40" : "bg-white/5 border-white/5"
+                      )}
+                    >
+                      <span>
+                        <span className={cn("block text-sm font-medium", sleepHours === o.key ? "text-indigo-200" : "text-slate-300")}>{o.label}</span>
+                        <span className="block text-[11px] text-slate-500 mt-0.5">{o.desc}</span>
+                      </span>
+                      <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0", sleepHours === o.key ? "border-indigo-400 bg-indigo-500/30" : "border-white/20")}>
+                        {sleepHours === o.key && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
             </motion.div>
@@ -211,6 +231,10 @@ export default function Onboarding() {
               )}
             </button>
           </div>
+
+          {saveError && (
+            <p className="text-center text-[11px] text-rose-400/90 mt-3">{saveError}</p>
+          )}
 
           <div className="flex justify-center gap-1.5 mt-4">
             {STEPS.map((s, i) => (

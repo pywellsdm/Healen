@@ -20,6 +20,13 @@ export async function ensureStreakRecord() {
     daily_reminder_time: "09:00",
     panic_button_enabled: true,
     journal_entries: [],
+    sleep_session_start: null,
+    sleep_current_streak_days: 0,
+    sleep_longest_streak_days: 0,
+    sleep_total_nights: 0,
+    sleep_total_resets: 0,
+    sleep_last_success_date: null,
+    sleep_last_duration_min: null,
   });
 }
 
@@ -94,4 +101,94 @@ export function formatTime(dateStr) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+// ---------------- Sleep tracking ----------------
+export const SLEEP_MIN_MINUTES = 7 * 60; // 7 hours
+export const SLEEP_MAX_MINUTES = 9 * 60; // 9 hours
+export const SLEEP_STALE_MINUTES = 20 * 60; // a session older than 20h is abandoned
+
+export function localDateStr(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function startSleepSession(record) {
+  if (record?.sleep_session_start) return record;
+  return db.entities.Streak.update(record.id, {
+    sleep_session_start: new Date().toISOString(),
+  });
+}
+
+export function abandonSleepSession(record) {
+  if (!record?.sleep_session_start) return record;
+  return db.entities.Streak.update(record.id, {
+    sleep_session_start: null,
+  });
+}
+
+export function sleepElapsedMin(record) {
+  if (!record?.sleep_session_start) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(record.sleep_session_start).getTime()) / 60000));
+}
+
+export function formatDuration(min) {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}
+
+export async function wakeUp(record) {
+  if (!record?.sleep_session_start) return { status: "none", streak: record };
+  const end = new Date().toISOString();
+  const start = new Date(record.sleep_session_start);
+  const durationMin = Math.max(0, Math.round((new Date(end).getTime() - start.getTime()) / 60000));
+
+  let status = "success";
+  if (durationMin < SLEEP_MIN_MINUTES) status = "short";
+  else if (durationMin > SLEEP_MAX_MINUTES) status = "overslept";
+
+  const today = localDateStr(end);
+  const last = record.sleep_last_success_date || null;
+  const yesterday = localDateStr(new Date(Date.now() - 86400000).toISOString());
+
+  let current = record.sleep_current_streak_days || 0;
+  if (status === "success") {
+    if (last === today) {
+      // already counted today — keep current
+    } else if (last === yesterday) {
+      current += 1;
+    } else if (!last) {
+      current = 1;
+    } else {
+      current = 1; // a night was skipped — restart
+    }
+  } else {
+    current = 0;
+  }
+
+  const resets = (record.sleep_total_resets || 0) + (status === "success" ? 0 : 1);
+  const longest = Math.max(record.sleep_longest_streak_days || 0, current);
+  const nights = (record.sleep_total_nights || 0) + (status === "success" ? 1 : 0);
+
+  const next = await db.entities.Streak.update(record.id, {
+    sleep_session_start: null,
+    sleep_current_streak_days: current,
+    sleep_longest_streak_days: longest,
+    sleep_total_nights: nights,
+    sleep_total_resets: resets,
+    sleep_last_success_date: status === "success" ? today : record.sleep_last_success_date,
+    sleep_last_duration_min: durationMin,
+  });
+
+  await db.entities.Sleep.create({
+    start_date: record.sleep_session_start,
+    end_date: end,
+    duration_min: durationMin,
+    status,
+  });
+
+  return { status, durationMin, streak: next };
 }

@@ -58,7 +58,7 @@ async function checkReminder() {
   lastFired = stamp;
 
   try {
-    new Notification("UnGoonify", {
+    new Notification("Healen", {
       body: "Time to check in. How's your streak doing today?",
       tag: "daily-checkin",
     });

@@ -78,7 +78,25 @@ const getSession = () => localStorage.getItem(SESSION_KEY);
 const setSession = (u) =>
   u ? localStorage.setItem(SESSION_KEY, u) : localStorage.removeItem(SESSION_KEY);
 
-const currentUsername = () => getSession();
+// The profile flow ("I'm new") doesn't create a username session, so fall back
+// to the device profile id so private data always has a stable owner key.
+const currentUsername = () => {
+  const session = getSession();
+  if (session) return session;
+  try {
+    const raw = localStorage.getItem(`${PREFIX}:profile`);
+    if (raw) {
+      const profile = JSON.parse(raw);
+      if (profile && profile.id) {
+        setSession(profile.id);
+        return profile.id;
+      }
+    }
+  } catch (e) {
+    /* ignore */
+  }
+  return null;
+};
 
 const publicUser = (user) => ({
   id: user.username,
@@ -180,9 +198,9 @@ export const auth = {
 };
 
 // ---- entity storage ----
-// Private records (Streak, CheckIn, Relapse) are scoped to the logged-in user.
+// Private records (Streak, CheckIn, Relapse, Sleep) are scoped to the logged-in user.
 // Community records (Post, Comment) are shared across this device.
-const PRIVATE_ENTITIES = new Set(["streak", "checkin", "relapse"]);
+const PRIVATE_ENTITIES = new Set(["streak", "checkin", "relapse", "sleep"]);
 
 function entityKey(entity) {
   const name = String(entity).toLowerCase();
@@ -265,6 +283,7 @@ export const entities = {
   Streak: makeEntity("Streak"),
   CheckIn: makeEntity("CheckIn"),
   Relapse: makeEntity("Relapse"),
+  Sleep: makeEntity("Sleep"),
   Post: makeEntity("Post"),
   Comment: makeEntity("Comment"),
 };

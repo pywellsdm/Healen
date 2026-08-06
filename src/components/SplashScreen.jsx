@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import logo from "@/assets/healen-logo.png";
 
 const EASE = [0.22, 1, 0.36, 1];
 
@@ -29,15 +30,15 @@ export default function SplashScreen() {
           initial={{ opacity: 0, scale: 0.4, rotate: -12 }}
           animate={{ opacity: 1, scale: 1, rotate: 0 }}
           transition={{ duration: 0.7, ease: EASE }}
-          className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-500 shadow-xl shadow-indigo-500/40 flex items-center justify-center mb-6"
+          className="mb-6"
         >
-          <motion.span
-            className="text-4xl font-black text-white"
-            animate={{ scale: [1, 1.12, 1] }}
+          <motion.img
+            src={logo}
+            alt="Healen"
+            className="w-20 h-20 rounded-3xl shadow-xl shadow-indigo-500/40 object-cover"
+            animate={{ scale: [1, 1.08, 1] }}
             transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-          >
-            U
-          </motion.span>
+          />
         </motion.div>
 
         <motion.h1
@@ -46,7 +47,7 @@ export default function SplashScreen() {
           transition={{ delay: 0.25, duration: 0.6, ease: EASE }}
           className="text-3xl font-bold tracking-tight text-white"
         >
-          UnGoonify
+          Healen
         </motion.h1>
 
         <motion.p
@@ -55,7 +56,7 @@ export default function SplashScreen() {
           transition={{ delay: 0.5, duration: 0.6 }}
           className="text-xs uppercase tracking-[0.35em] text-indigo-300/70 mt-2"
         >
-          Take back your mind
+          Live healthy, sleep well
         </motion.p>
 
         <motion.div

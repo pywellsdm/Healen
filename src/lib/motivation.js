@@ -23,6 +23,13 @@ export const MOTIVATION_TONES = {
       "Walk away from the screen. Your brain is begging for a hit — don't feed the loop.",
       "This is the moment that builds the man. Stay.",
     ],
+    sleep: [
+      "Your body is ready for rest. The rest of the world can wait until morning.",
+      "Tonight isn't about doing anything. It's about letting go. Be still.",
+      "You don't have to quiet every thought. Just pick one slow breath, then the next.",
+      "The bed is for sleeping, not for thinking. Give your mind permission to clock out.",
+      "Drifting off isn't a skill you force. It's a place you return to, gently.",
+    ],
   },
   tough: {
     relapse: [
@@ -45,6 +52,13 @@ export const MOTIVATION_TONES = {
       "Get up. Move. Do 20 push-ups. Cold water on your face. Break the pattern. Now.",
       "This is a test. Every time you resist, you get stronger. Every time you give in, you get weaker. Choose strength.",
       "The version of you that gives in is not who you want to be. Be the man who walks away.",
+    ],
+    sleep: [
+      "Put the phone down. Nothing on that screen matters more than tonight's rest.",
+      "You're not 'failing to sleep' — you're feeding the racing thoughts. Cut them off. Close your eyes.",
+      "Rest is a performance enhancer. Every hour you bank tonight makes tomorrow sharper.",
+      "Lying awake and scrolling is still using. Choose the boring, dark room. Let it win.",
+      "Discipline doesn't clock out at bedtime. Shut it down properly.",
     ],
   },
   spiritual: [

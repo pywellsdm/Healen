@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, AI_PROVIDERS } from "@/lib/store";
-import { buildAIContext, AI_PERSONAS } from "@/lib/aiContext";
+import { buildAIContext, AI_PERSONAS, SLEEP_PLAN_LABELS } from "@/lib/aiContext";
 import { ensureStreakRecord, calculateStreakDays } from "@/lib/streakUtils";
 import {
   Bot,
@@ -22,6 +22,7 @@ const QUICK_PROMPTS = [
   "I'm feeling discouraged today",
   "Give me my weekly review",
   "How do I avoid late-night relapses?",
+  "Help me fall asleep tonight",
   "I just relapsed, help me get back up",
 ];
 
@@ -337,7 +338,13 @@ export default function AICoach() {
               <span className="text-indigo-300 font-medium">
                 {aiCurrentDays} days clean
               </span>{" "}
-              with a goal of {streak?.current_goal_days || 30}. What's on your mind?
+              with a goal of {streak?.current_goal_days || 30} days, and you're on a{" "}
+              <span className="text-indigo-300 font-medium">
+                {streak?.sleep_current_streak_days || 0}-night sleep streak
+              </span>
+              {streak?.sleep_plan
+                ? ` aiming for ${SLEEP_PLAN_LABELS[streak.sleep_plan] || streak.sleep_plan} a night`
+                : ""}. What's on your mind?
             </p>
           </div>
 
