@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { db } from "@/lib/store";
-import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, formatDate, formatDuration } from "@/lib/streakUtils";
+import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, formatDate, formatDuration, getTotalAppDays } from "@/lib/streakUtils";
 import MilestoneTracker from "@/components/streak/MilestoneTracker";
 import { TRIGGER_LABELS, MOOD_EMOJI } from "@/lib/motivation";
 import { SLEEP_MILESTONES } from "@/lib/milestones";
 import { useMode } from "@/lib/ModeContext";
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell,
-  LineChart, Line, CartesianGrid,
+  LineChart, Line, CartesianGrid, ReferenceArea,
 } from "recharts";
 import { TrendingUp, Calendar, Target, Flame, Award, Activity, Moon, AlertTriangle } from "lucide-react";
 
@@ -117,8 +118,8 @@ export default function Statistics() {
   const sleepSuccessRate = sleepEntries.length > 0
     ? Math.round((sleepSuccess.length / sleepEntries.length) * 100)
     : 100;
-  const sleepChart = sleepEntries.slice(-14).map((s, i) => ({
-    day: `${i + 1}`,
+  const sleepChart = sleepEntries.slice(-14).map((s) => ({
+    day: new Date(s.start_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     hours: Math.round(((s.duration_min || 0) / 60) * 10) / 10,
     color: SLEEP_STATUS_COLORS[s.status] || "#818cf8",
     status: s.status,
@@ -126,8 +127,8 @@ export default function Statistics() {
   const sleepStats = [
     { icon: Moon, label: "Current Streak", value: sleepDays, unit: "night", color: "text-indigo-400" },
     { icon: Award, label: "Longest Streak", value: sleepBest, unit: "night", color: "text-yellow-400" },
-    { icon: Calendar, label: "Total Nights", value: streak?.sleep_total_nights || 0, unit: "night", color: "text-emerald-400" },
-    { icon: Activity, label: "Avg Duration", value: avgSleepMin > 0 ? formatDuration(avgSleepMin) : "—", unit: "", color: "text-cyan-400" },
+    { icon: Calendar, label: "Total Nights", value: sleepEntries.length, unit: "night", color: "text-emerald-400" },
+    { icon: Activity, label: "Avg Duration", value: avgSleepMin > 0 ? formatDuration(avgSleepMin) : "—", unit: "per night", color: "text-cyan-400" },
     { icon: TrendingUp, label: "Success Rate", value: sleepSuccessRate, unit: "%", color: "text-indigo-300" },
     { icon: AlertTriangle, label: "Missed Nights", value: streak?.sleep_total_resets || 0, unit: "", color: "text-rose-400" },
   ];
@@ -135,7 +136,7 @@ export default function Statistics() {
   const stats = [
     { icon: Flame, label: "Current Streak", value: currentDays, unit: "days", color: "text-orange-400" },
     { icon: Award, label: "Longest Streak", value: bestDays, unit: "days", color: "text-yellow-400" },
-    { icon: Calendar, label: "Total Clean Days", value: streak?.total_clean_days || 0, unit: "days", color: "text-emerald-400" },
+    { icon: Calendar, label: "Total Days", value: getTotalAppDays(streak), unit: "days", color: "text-emerald-400" },
     { icon: Target, label: "Success Rate", value: successRate, unit: "%", color: "text-indigo-400" },
     { icon: TrendingUp, label: "Daily Check-Ins", value: streak?.daily_goal_streak || 0, unit: "streak", color: "text-cyan-400" },
     { icon: Activity, label: "Total Resets", value: streak?.total_relapses || 0, unit: "", color: "text-rose-400" },
@@ -174,16 +175,23 @@ export default function Statistics() {
           <>
             {/* Stat cards */}
             <div className="grid grid-cols-2 gap-3 mb-6">
-              {sleepStats.map((s) => {
+              {sleepStats.map((s, idx) => {
                 const Icon = s.icon;
                 return (
-                  <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                  <motion.div
+                    key={s.label}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: idx * 0.05 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="bg-white/5 border border-white/10 rounded-2xl p-4"
+                  >
                     <Icon className={`w-5 h-5 ${s.color} mb-2`} />
                     <p className="text-2xl font-bold text-white tabular-nums">
                       {s.value}<span className="text-sm text-slate-500 ml-1">{s.unit}</span>
                     </p>
                     <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">{s.label}</p>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -192,7 +200,8 @@ export default function Statistics() {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
               <p className="text-sm font-semibold text-white mb-1">Sleep Duration — Last {sleepChart.length} Nights</p>
               <p className="text-xs text-slate-500 mb-4">
-                Indigo = 7-9h · Amber = under 7h · Rose = over 9h
+                Bars show hours slept each night. The amber band marks your <span className="text-amber-300">7-9h target</span> —
+                bars below it were too short, bars above it were oversleep.
               </p>
               {sleepEntries.length === 0 ? (
                 <div className="text-center py-10">
@@ -203,14 +212,15 @@ export default function Statistics() {
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={sleepChart}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis dataKey="day" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} interval={0} />
-                    <YAxis domain={[0, 10]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={20} />
+                    <XAxis dataKey="day" stroke="#64748b" fontSize={8} tickLine={false} axisLine={false} interval={1} />
+                    <YAxis domain={[0, 12]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={24} />
                     <Tooltip
                       contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: "#94a3b8" }}
                       cursor={{ fill: "rgba(255,255,255,0.03)" }}
-                      formatter={(value, _name, item) => [`${value}h`, item.payload.status === "success" ? "Good sleep" : item.payload.status === "short" ? "Too short" : "Overslept"]}
+                      formatter={(value, _name, item) => [`${value}h`, item.payload.status === "success" ? "Good sleep (7-9h)" : item.payload.status === "short" ? "Too short (<7h)" : "Overslept (>9h)"]}
                     />
+                    <ReferenceArea y1={7} y2={9} fill="#f59e0b" fillOpacity={0.08} />
                     <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
                       {sleepChart.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
@@ -269,16 +279,23 @@ export default function Statistics() {
         <>
           {/* Stat cards */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            {stats.map((s) => {
+            {stats.map((s, idx) => {
               const Icon = s.icon;
               return (
-                <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                <motion.div
+                  key={s.label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: idx * 0.05 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="bg-white/5 border border-white/10 rounded-2xl p-4"
+                >
                   <Icon className={`w-5 h-5 ${s.color} mb-2`} />
                   <p className="text-2xl font-bold text-white tabular-nums">
                     {s.value}<span className="text-sm text-slate-500 ml-1">{s.unit}</span>
                   </p>
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">{s.label}</p>
-                </div>
+                </motion.div>
               );
             })}
           </div>

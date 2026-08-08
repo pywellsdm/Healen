@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/store";
@@ -58,7 +59,12 @@ export default function DailyCheckIn({ streak, onCompleted }) {
 
   if (done || alreadyCheckedIn) {
     return (
-      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex items-center gap-3">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 26 }}
+        className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex items-center gap-3"
+      >
         <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
           <Check className="w-5 h-5 text-emerald-400" />
         </div>
@@ -66,7 +72,7 @@ export default function DailyCheckIn({ streak, onCompleted }) {
           <p className="text-sm font-semibold text-emerald-200">Checked in for today</p>
           <p className="text-xs text-emerald-400/70">See you tomorrow. One day at a time.</p>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -80,9 +86,10 @@ export default function DailyCheckIn({ streak, onCompleted }) {
       <p className="text-xs text-slate-400 mb-3">How are you feeling today?</p>
       <div className="flex justify-between gap-1 mb-4">
         {MOODS.map((m) => (
-          <button
+          <motion.button
             key={m.key}
             onClick={() => setSelectedMood(m.key)}
+            whileTap={{ scale: 0.92 }}
             className={cn(
               "flex-1 flex flex-col items-center gap-1 py-2 rounded-xl border transition-all",
               selectedMood === m.key
@@ -94,7 +101,7 @@ export default function DailyCheckIn({ streak, onCompleted }) {
             <span className={cn("text-[10px] font-medium", selectedMood === m.key ? "text-white" : "text-slate-500")}>
               {m.label}
             </span>
-          </button>
+          </motion.button>
         ))}
       </div>
 
@@ -113,13 +120,14 @@ export default function DailyCheckIn({ streak, onCompleted }) {
         />
       </div>
 
-      <button
+      <motion.button
         onClick={handleSubmit}
         disabled={!selectedMood || submitting}
+        whileTap={selectedMood ? { scale: 0.97 } : undefined}
         className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium text-sm disabled:opacity-40 hover:opacity-90 transition-opacity"
       >
         {submitting ? "Saving..." : "Complete Check-In"}
-      </button>
+      </motion.button>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { Moon, Sunrise, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -110,14 +111,15 @@ export default function SleepTracker({ streak, onRefresh }) {
           </div>
         )}
 
-        <button
+        <motion.button
           onClick={handleWake}
           disabled={busy}
+          whileTap={{ scale: 0.97 }}
           className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           <Sunrise className="w-4 h-4" />
           {busy ? "Waking up..." : "I woke up"}
-        </button>
+        </motion.button>
       </div>
     );
   }
@@ -146,14 +148,15 @@ export default function SleepTracker({ streak, onRefresh }) {
         </p>
       )}
 
-      <button
+      <motion.button
         onClick={handleStart}
         disabled={busy}
+        whileTap={{ scale: 0.97 }}
         className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
       >
         <Moon className="w-4 h-4" />
         {busy ? "Starting..." : "Start Sleep"}
-      </button>
+      </motion.button>
 
       {result && (
         <p className={cn(

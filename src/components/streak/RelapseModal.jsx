@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TRIGGER_LABELS } from "@/lib/motivation";
@@ -121,12 +122,13 @@ export default function RelapseModal({ open, onClose, streak, onCompleted }) {
                   </button>
                 ))}
               </div>
-              <button
+              <motion.button
                 onClick={() => setStep(1)}
+                whileTap={{ scale: 0.97 }}
                 className="w-full py-3 rounded-xl bg-white/10 text-white font-medium text-sm hover:bg-white/15"
               >
                 Continue
-              </button>
+              </motion.button>
             </>
           )}
 
@@ -170,18 +172,20 @@ export default function RelapseModal({ open, onClose, streak, onCompleted }) {
                 ))}
               </div>
               <div className="flex gap-2">
-                <button
+                <motion.button
                   onClick={() => setStep(0)}
+                  whileTap={{ scale: 0.97 }}
                   className="flex-1 py-3 rounded-xl bg-white/5 text-slate-400 font-medium text-sm"
                 >
                   Back
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                   onClick={() => setStep(2)}
+                  whileTap={{ scale: 0.97 }}
                   className="flex-1 py-3 rounded-xl bg-white/10 text-white font-medium text-sm"
                 >
                   Continue
-                </button>
+                </motion.button>
               </div>
             </>
           )}
@@ -210,13 +214,14 @@ export default function RelapseModal({ open, onClose, streak, onCompleted }) {
                 >
                   Back
                 </button>
-                <button
+                <motion.button
                   onClick={handleSubmit}
                   disabled={submitting}
+                  whileTap={{ scale: 0.97 }}
                   className="flex-1 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 text-white font-medium text-sm disabled:opacity-50"
                 >
                   {submitting ? "Recording..." : "Reset & Learn"}
-                </button>
+                </motion.button>
               </div>
             </>
           )}

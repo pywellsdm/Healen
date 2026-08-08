@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, getNextGoal } from "@/lib/streakUtils";
+import { AnimatePresence, motion } from "framer-motion";
+import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, getNextGoal, getTotalAppDays } from "@/lib/streakUtils";
 import { getRecentMilestone, SLEEP_MILESTONES } from "@/lib/milestones";
 import StreakCounter from "@/components/streak/StreakCounter";
 import MotivationCard from "@/components/streak/MotivationCard";
@@ -103,12 +104,11 @@ export default function Dashboard() {
   };
 
   const handleCheckInComplete = async () => {
+    // Only celebrate when the streak actually upgrades (a new milestone or goal
+    // was reached) — not on every routine check-in.
     const res = await loadStreak();
     if (res.celebration) {
       setCelebration(res.celebration);
-    } else {
-      const day = calculateStreakDays(res.streak.streak_start_date);
-      setCelebration({ type: "checkin", day });
     }
   };
 
@@ -125,36 +125,49 @@ export default function Dashboard() {
   const sleepDays = sleeping ? streak?.sleep_current_streak_days || 0 : 0;
 
   return (
-    <div className="px-5 pt-12 pb-4">
+    <motion.div
+      className="px-5 pt-12 pb-4"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+    >
       {/* Mode switcher */}
       <ModeSwitcher />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-slate-500 font-medium">
-            {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-          </p>
-          <h1 className="text-xl font-bold text-white">
-            {sleeping
-              ? (streak?.user_name ? `Sleep well, ${streak.user_name}` : "Your Sleep")
-              : (streak?.user_name ? `Stay strong, ${streak.user_name}` : "Your Recovery")}
-          </h1>
-        </div>
-        {sleeping ? (
-          <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1.5">
-            <Moon className="w-4 h-4 text-indigo-300" />
-            <span className="text-sm font-bold text-indigo-200 tabular-nums">{sleepDays}</span>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={sleeping ? "sleeping" : "gooning"}
+          initial={{ opacity: 0, x: sleeping ? 24 : -24 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: sleeping ? -24 : 24 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-500 font-medium">
+                {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+              </p>
+              <h1 className="text-xl font-bold text-white">
+                {sleeping
+                  ? (streak?.user_name ? `Sleep well, ${streak.user_name}` : "Your Sleep")
+                  : (streak?.user_name ? `Stay strong, ${streak.user_name}` : "Your Recovery")}
+              </h1>
+            </div>
+            {sleeping ? (
+              <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1.5">
+                <Moon className="w-4 h-4 text-indigo-300" />
+                <span className="text-sm font-bold text-indigo-200 tabular-nums">{sleepDays}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full px-3 py-1.5">
+                <Flame className="w-4 h-4 text-orange-400" />
+                <span className="text-sm font-bold text-orange-300 tabular-nums">{currentDays}</span>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full px-3 py-1.5">
-            <Flame className="w-4 h-4 text-orange-400" />
-            <span className="text-sm font-bold text-orange-300 tabular-nums">{currentDays}</span>
-          </div>
-        )}
-      </div>
 
-      {sleeping ? (
+          {sleeping ? (
         <>
           {/* Quick stats */}
           <div className="grid grid-cols-3 gap-2 mb-6">
@@ -212,7 +225,7 @@ export default function Dashboard() {
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
               <Calendar className="w-4 h-4 text-indigo-400 mx-auto mb-1" />
-              <p className="text-lg font-bold text-white tabular-nums">{streak?.total_clean_days || 0}</p>
+              <p className="text-lg font-bold text-white tabular-nums">{getTotalAppDays(streak)}</p>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Days</p>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
@@ -252,13 +265,14 @@ export default function Dashboard() {
 
           {/* Relapse button */}
           <div className="mb-6">
-            <button
+            <motion.button
               onClick={() => setShowRelapse(true)}
+              whileTap={{ scale: 0.97 }}
               className="w-full py-4 rounded-2xl bg-rose-950/30 border border-rose-800/30 text-rose-300 font-medium text-sm hover:bg-rose-950/50 transition-colors flex items-center justify-center gap-2"
             >
               <AlertTriangle className="w-4 h-4" />
               I Relapsed — Reset My Streak
-            </button>
+            </motion.button>
             <p className="text-center text-xs text-slate-600 mt-2">
               No shame. Reporting it is how you grow stronger.
             </p>
@@ -281,6 +295,8 @@ export default function Dashboard() {
           </div>
         </>
       )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Modals */}
       <RelapseModal
@@ -291,6 +307,6 @@ export default function Dashboard() {
       />
       <RelapseRecovery data={recoveryData} onClose={handleRecoveryClose} />
       <Celebration celebration={celebration} onClose={() => setCelebration(null)} />
-    </div>
+    </motion.div>
   );
 }

@@ -4,7 +4,21 @@ import { db } from "@/lib/store";
 export async function ensureStreakRecord() {
   const existing = await db.entities.Streak.filter({}, "-created_date", 1);
   if (existing && existing.length > 0) {
-    return existing[0];
+    const record = existing[0];
+    try {
+      // Self-heal: keep "total nights" equal to every logged session (not just
+      // successful ones) so it never mirrors the best streak.
+      const sleeps = await db.entities.Sleep.filter({}, "-start_date", 100000);
+      if ((record.sleep_total_nights || 0) !== sleeps.length) {
+        const updated = await db.entities.Streak.update(record.id, {
+          sleep_total_nights: sleeps.length,
+        });
+        Object.assign(record, updated);
+      }
+    } catch (e) {
+      /* non-fatal */
+    }
+    return record;
   }
   const now = new Date().toISOString();
   return await db.entities.Streak.create({
@@ -50,6 +64,15 @@ export function calculateStreakDays(startDate) {
   const start = new Date(startDate).getTime();
   const elapsed = Math.max(0, Date.now() - start);
   return Math.floor(elapsed / 86400000);
+}
+
+// Lifetime days the user has been on the app, counted from when their streak
+// record was created. This is a monotonic "time since install" counter, meant
+// to be shown as "Total Days" — independent of current/best streak.
+export function getTotalAppDays(streak) {
+  if (!streak?.created_date) return streak?.total_clean_days || 0;
+  const created = new Date(streak.created_date).getTime();
+  return Math.max(0, Math.floor((Date.now() - created) / 86400000)) + 1;
 }
 
 // Calculate streak as a fractional number of days (for progress bars)
@@ -171,7 +194,9 @@ export async function wakeUp(record) {
 
   const resets = (record.sleep_total_resets || 0) + (status === "success" ? 0 : 1);
   const longest = Math.max(record.sleep_longest_streak_days || 0, current);
-  const nights = (record.sleep_total_nights || 0) + (status === "success" ? 1 : 0);
+  // Every completed sleep session counts toward the lifetime total, not just
+  // successful ones — "total nights on the app" shouldn't mirror the best streak.
+  const nights = (record.sleep_total_nights || 0) + 1;
 
   const next = await db.entities.Streak.update(record.id, {
     sleep_session_start: null,
