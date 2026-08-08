@@ -1,6 +1,6 @@
 // Central app identity + release config
 export const APP_NAME = "Healen";
-export const APP_VERSION = "3.1.1";
+export const APP_VERSION = "3.1.2";
 
 // GitHub repo used for update checks (owner/repo).
 export const GITHUB_REPO = "pywellsdm/Healen";
