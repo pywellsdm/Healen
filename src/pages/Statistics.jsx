@@ -20,6 +20,16 @@ const SLEEP_STATUS_COLORS = {
   overslept: "#fb7185",
 };
 
+const TOOLTIP_STYLE = {
+  background: "#0E0F1A",
+  border: "1px solid rgba(255,255,255,0.15)",
+  borderRadius: 8,
+  fontSize: 12,
+  color: "#e2e8f0",
+};
+const TOOLTIP_LABEL_STYLE = { color: "#94a3b8", marginBottom: 4 };
+const TOOLTIP_ITEM_STYLE = { color: "#f1f5f9" };
+
 export default function Statistics() {
   const { mode } = useMode();
   const sleeping = mode === "sleeping";
@@ -215,8 +225,9 @@ export default function Statistics() {
                     <XAxis dataKey="day" stroke="#64748b" fontSize={8} tickLine={false} axisLine={false} interval={1} />
                     <YAxis domain={[0, 12]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={24} />
                     <Tooltip
-                      contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
-                      labelStyle={{ color: "#94a3b8" }}
+                      contentStyle={TOOLTIP_STYLE}
+                      labelStyle={TOOLTIP_LABEL_STYLE}
+                      itemStyle={TOOLTIP_ITEM_STYLE}
                       cursor={{ fill: "rgba(255,255,255,0.03)" }}
                       formatter={(value, _name, item) => [`${value}h`, item.payload.status === "success" ? "Good sleep (7-9h)" : item.payload.status === "short" ? "Too short (<7h)" : "Overslept (>9h)"]}
                     />
@@ -309,8 +320,9 @@ export default function Statistics() {
                 <XAxis dataKey="day" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis domain={[0, 5]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={20} />
                 <Tooltip
-                  contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: "#94a3b8" }}
+                  contentStyle={TOOLTIP_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
                 />
                 <Line type="monotone" dataKey="mood" stroke="#818cf8" strokeWidth={2} dot={{ fill: "#818cf8", r: 3 }} />
               </LineChart>
@@ -327,8 +339,9 @@ export default function Statistics() {
                 <XAxis dataKey="day" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} interval={1} />
                 <YAxis domain={[0, 10]} stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={20} />
                 <Tooltip
-                  contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: "#94a3b8" }}
+                  contentStyle={TOOLTIP_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
+                  itemStyle={TOOLTIP_ITEM_STYLE}
                   cursor={{ fill: "rgba(255,255,255,0.03)" }}
                 />
                 <Bar dataKey="urge" fill="#f43f5e" radius={[4, 4, 0, 0]} />
@@ -349,7 +362,9 @@ export default function Statistics() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ background: "#0E0F1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={TOOLTIP_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
+                    itemStyle={TOOLTIP_ITEM_STYLE}
                   />
                 </PieChart>
               </ResponsiveContainer>

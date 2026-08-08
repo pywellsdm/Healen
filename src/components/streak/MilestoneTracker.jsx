@@ -123,7 +123,7 @@ export default function MilestoneTracker({ currentDays, progressDays, list = MIL
       <AnimatePresence>
         {selected && (
           <motion.div
-            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center overflow-y-auto"
+            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -134,7 +134,7 @@ export default function MilestoneTracker({ currentDays, progressDays, list = MIL
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: 80, opacity: 0, scale: 0.98 }}
               transition={{ type: "spring", stiffness: 380, damping: 34 }}
-              className="relative w-full max-w-md bg-[#0E0F1A] rounded-t-3xl sm:rounded-3xl sm:border sm:border-white/10 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+              className="relative w-full max-w-md bg-[#0E0F1A] rounded-t-3xl sm:rounded-3xl sm:border sm:border-white/10 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] max-h-[88dvh] overflow-y-auto overscroll-contain"
             >
               <button
                 onClick={close}
