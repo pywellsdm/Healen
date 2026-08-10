@@ -29,6 +29,7 @@ import java.util.Calendar;
 public class LocalNotificationPlugin extends Plugin {
 
     public static final int REQ_CODE = 4242;
+    public static final int ALARM_REQ_CODE = 4243;
 
     @PluginMethod
     public void requestPermission(PluginCall call) {
@@ -84,9 +85,42 @@ public class LocalNotificationPlugin extends Plugin {
         call.resolve();
     }
 
+    @PluginMethod
+    public void scheduleAlarmOnce(PluginCall call) {
+        long timestamp = call.getLong("timestamp", System.currentTimeMillis() + 60000);
+        Context ctx = getContext();
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) {
+            call.reject("AlarmManager unavailable");
+            return;
+        }
+        am.cancel(buildAlarmIntent(ctx));
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, buildAlarmIntent(ctx));
+        JSObject ret = new JSObject();
+        ret.put("scheduled", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void cancelAlarm(PluginCall call) {
+        Context ctx = getContext();
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am != null) {
+            am.cancel(buildAlarmIntent(ctx));
+        }
+        call.resolve();
+    }
+
     private PendingIntent buildIntent(Context ctx) {
         Intent i = new Intent(ctx, ReminderReceiver.class);
         return PendingIntent.getBroadcast(ctx, REQ_CODE, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private PendingIntent buildAlarmIntent(Context ctx) {
+        Intent i = new Intent(ctx, ReminderReceiver.class);
+        i.setAction("com.healen.app.ALARM");
+        return PendingIntent.getBroadcast(ctx, ALARM_REQ_CODE, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 }

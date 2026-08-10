@@ -12,7 +12,7 @@ import {
   SLEEP_STALE_MINUTES,
 } from "@/lib/streakUtils";
 
-export default function SleepTracker({ streak, onRefresh }) {
+export default function SleepTracker({ streak, onRefresh, onWakeSuccess }) {
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -70,6 +70,7 @@ export default function SleepTracker({ streak, onRefresh }) {
       setNow(Date.now());
       if (status === "success") {
         showResult(`Nice — ${formatDuration(durationMin)} of real rest. Your sleep streak is now ${next.sleep_current_streak_days} night${next.sleep_current_streak_days === 1 ? "" : "s"}.`, "success");
+        onWakeSuccess?.({ status, durationMin, streak: next });
       } else if (status === "short") {
         showResult(`${formatDuration(durationMin)} is under 7 hours — it doesn't count toward your streak. Try to get a full night tonight.`, "warn");
       } else if (status === "overslept") {

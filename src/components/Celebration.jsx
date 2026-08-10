@@ -77,6 +77,10 @@ export default function Celebration({ celebration, onClose }) {
     title = `Goal Reached — ${day} days! 🎉`;
     subtitle = `Amazing. You leveled up. Next goal: ${nextGoal} days.`;
     emoji = "🎯";
+  } else if (type === "sleep") {
+    title = `Night ${day} Rested!`;
+    subtitle = "A full night of real sleep. Your streak is growing. 🌙";
+    emoji = "🌙";
   }
 
   return (
@@ -103,7 +107,7 @@ export default function Celebration({ celebration, onClose }) {
             </button>
             <div className="text-6xl mb-3">{emoji}</div>
             <p className="text-[10px] uppercase tracking-[0.25em] text-indigo-300/80 font-semibold mb-1">
-              {type === "checkin" ? "Streak update" : type === "goal" ? "Level up" : "Milestone unlocked"}
+              {type === "checkin" ? "Streak update" : type === "goal" ? "Level up" : type === "sleep" ? "Sleep streak update" : "Milestone unlocked"}
             </p>
             <h2 className="text-xl font-bold text-white mb-1.5">{title}</h2>
             <p className="text-xs text-slate-400 leading-relaxed">{subtitle}</p>
@@ -123,6 +127,12 @@ export default function Celebration({ celebration, onClose }) {
               <div className="mt-4 flex items-center justify-center gap-1.5">
                 <Flame className="w-4 h-4 text-orange-400" />
                 <span className="text-xs text-slate-300">You're building something real</span>
+              </div>
+            )}
+            {type === "sleep" && (
+              <div className="mt-4 flex items-center justify-center gap-1.5">
+                <Flame className="w-4 h-4 text-indigo-400" />
+                <span className="text-xs text-slate-300">Your body is healing while you rest</span>
               </div>
             )}
           </div>

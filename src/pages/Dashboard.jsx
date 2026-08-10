@@ -11,10 +11,13 @@ import ModeSwitcher from "@/components/ModeSwitcher";
 import RelapseModal from "@/components/streak/RelapseModal";
 import RelapseRecovery from "@/components/streak/RelapseRecovery";
 import Celebration from "@/components/Celebration";
-import { AlertTriangle, TrendingUp, Flame, Moon, Calendar, ChevronRight, Target } from "lucide-react";
+import { AlertTriangle, TrendingUp, Flame, Moon, Calendar, ChevronRight, Target, AlarmClock, BellOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "@/lib/store";
 import { useMode } from "@/lib/ModeContext";
+import { useAlarm } from "@/components/AlarmSystem";
+import { formatAlarmTime, minutesUntilAlarm } from "@/lib/alarm";
+import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -27,6 +30,8 @@ export default function Dashboard() {
   const [currentDays, setCurrentDays] = useState(0);
   const [progressDays, setProgressDays] = useState(0);
   const [celebration, setCelebration] = useState(null);
+  const { settings: alarm, save: saveAlarm, triggerNow } = useAlarm();
+  const [alarmTick, setAlarmTick] = useState(Date.now());
 
   const loadStreak = async () => {
     const s = await ensureStreakRecord();
@@ -73,7 +78,7 @@ export default function Dashboard() {
     setStreak(updated);
     setCurrentDays(current);
     setProgressDays(progress);
-    return { streak: updated, celebration: goalCelebration || milestoneCelebration };
+    return { streak: updated, celebration: goalCelebration || milestoneCelebration, day: current };
   };
 
   useEffect(() => {
@@ -93,6 +98,12 @@ export default function Dashboard() {
     })();
   }, []);
 
+  // Keep the alarm countdown fresh
+  useEffect(() => {
+    const t = setInterval(() => setAlarmTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
   const handleRelapseComplete = (data) => {
     setShowRelapse(false);
     setRecoveryData(data);
@@ -104,11 +115,16 @@ export default function Dashboard() {
   };
 
   const handleCheckInComplete = async () => {
-    // Only celebrate when the streak actually upgrades (a new milestone or goal
-    // was reached) — not on every routine check-in.
+    // Celebrate every successful check-in — the streak just got updated.
+    // Milestones and goals take priority when they're also hit.
     const res = await loadStreak();
     if (res.celebration) {
       setCelebration(res.celebration);
+    } else {
+      setCelebration({
+        type: "checkin",
+        day: Math.max(res.day, res.streak?.daily_goal_streak || 0, 1),
+      });
     }
   };
 
@@ -190,7 +206,91 @@ export default function Dashboard() {
 
           {/* Sleep tracker (above Daily Fuel) */}
           <div className="mb-6">
-            <SleepTracker streak={streak} onRefresh={loadStreak} />
+            <SleepTracker
+              streak={streak}
+              onRefresh={loadStreak}
+              onWakeSuccess={({ streak: next }) => {
+                if (next?.sleep_current_streak_days > 0) {
+                  setCelebration({
+                    type: "sleep",
+                    day: Math.max(next.sleep_current_streak_days, 1),
+                  });
+                }
+              }}
+            />
+          </div>
+
+          {/* Wake-up alarm */}
+          <div className="mb-6">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-400/30 flex items-center justify-center">
+                  <AlarmClock className="w-5 h-5 text-rose-300" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white">Wake-up Alarm</p>
+                  <p className="text-xs text-slate-400">
+                    {alarm?.enabled
+                      ? `Set for ${formatAlarmTime(alarm.time || "07:00")}`
+                      : "Alarm is off"}
+                  </p>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!alarm) return;
+                    const next = !alarm.enabled;
+                    if (next) await saveAlarm({ enabled: true, lastFired: null });
+                    else await saveAlarm({ enabled: false });
+                  }}
+                  aria-label="Toggle alarm"
+                  className={cn(
+                    "w-12 h-7 rounded-full transition-colors relative shrink-0",
+                    alarm?.enabled ? "bg-rose-500" : "bg-white/10"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-0.5 w-6 h-6 rounded-full bg-white transition-transform",
+                    alarm?.enabled ? "translate-x-5" : "translate-x-0.5"
+                  )} />
+                </button>
+              </div>
+
+              {alarm?.enabled && (
+                <div className="mb-3">
+                  <label className="text-xs text-slate-400 mb-1.5 block">Alarm time</label>
+                  <input
+                    type="time"
+                    value={alarm.time || "07:00"}
+                    onChange={(e) => saveAlarm({ time: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-rose-400/50"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1.5">
+                    {alarm.lastFired
+                      ? "Rang today — flip it off and on to test again."
+                      : `${minutesUntilAlarm(alarm, new Date(alarmTick))} min until it rings`}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={triggerNow}
+                  className="flex-1 py-3 rounded-xl bg-rose-500/15 border border-rose-400/30 text-rose-200 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-rose-500/25 transition-colors"
+                >
+                  <AlarmClock className="w-4 h-4" />
+                  Test alarm now
+                </button>
+                {alarm?.enabled && alarm.lastFired && (
+                  <button
+                    onClick={() => saveAlarm({ enabled: true, lastFired: null })}
+                    className="px-3 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm flex items-center justify-center gap-1.5 hover:bg-white/10 transition-colors"
+                  >
+                    <BellOff className="w-4 h-4" />
+                    Re-arm
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Daily Fuel */}

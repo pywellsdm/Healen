@@ -6,10 +6,14 @@ import { useTheme } from "@/lib/ThemeContext";
 import { requestNotificationPermission } from "@/lib/notifications";
 import { IS_NATIVE } from "@/lib/appInfo";
 import { AI_PERSONAS } from "@/lib/aiContext";
+import { useAlarm } from "@/components/AlarmSystem";
+import { getAlarmAudioSrc, saveCustomAudio, clearCustomAudio, formatAlarmTime } from "@/lib/alarm";
+import { LocalNotification } from "@/lib/localNotifications";
 import {
   User, Bell, Heart, Target, Save, Sparkles, Trash2,
   Palette, Image, Bot, Upload, Copy, Check,
   Wifi, WifiOff, Download, ArchiveRestore, FileUp, Bitcoin, Wallet,
+  AlarmClock, Volume2, Music,
 } from "lucide-react";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
@@ -78,6 +82,36 @@ export default function Settings() {
   const [notifState, setNotifState] = useState("default");
   const [copiedAddr, setCopiedAddr] = useState("");
 
+  // Alarm state
+  const { settings: alarm, save: saveAlarm } = useAlarm();
+  const alarmAudioRef = useRef(null);
+  const alarmFileRef = useRef(null);
+  const [alarmTesting, setAlarmTesting] = useState(false);
+  const [hasCustomAudio, setHasCustomAudio] = useState(false);
+
+  const stopAlarmTest = () => {
+    if (alarmAudioRef.current) {
+      alarmAudioRef.current.pause();
+      alarmAudioRef.current.currentTime = 0;
+    }
+    setAlarmTesting(false);
+  };
+
+  const playAlarmTest = () => {
+    if (!alarm) return;
+    stopAlarmTest();
+    const a = new Audio(getAlarmAudioSrc(alarm));
+    alarmAudioRef.current = a;
+    a.loop = false;
+    a.volume = 1;
+    a.play().catch((e) => {
+      toast({ title: "Playback failed", description: "Could not play this audio.", variant: "destructive" });
+      setAlarmTesting(false);
+    });
+    setAlarmTesting(true);
+    a.onended = () => setAlarmTesting(false);
+  };
+
   const copyText = async (text, key) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -111,12 +145,27 @@ export default function Settings() {
         setNotifState("Notification" in window ? Notification.permission : "denied");
         const cfg = await db.ai.getConfig();
         setAiConfig(cfg);
+        try {
+          setHasCustomAudio(!!localStorage.getItem("healen:alarm:audio"));
+        } catch (err) {
+          /* ignore */
+        }
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     })();
+  }, []);
+
+  // Stop any in-progress test sound when leaving settings
+  useEffect(() => {
+    return () => {
+      if (alarmAudioRef.current) {
+        alarmAudioRef.current.pause();
+        alarmAudioRef.current = null;
+      }
+    };
   }, []);
 
   const selectAIConfig = (cfg) => {
@@ -656,6 +705,186 @@ export default function Settings() {
             Enable browser notifications
           </button>
         )}
+      </Section>
+
+      {/* Sleep Alarm */}
+      <Section icon={AlarmClock} title="Sleep Alarm">
+        <p className="text-xs text-slate-400 mb-3 leading-relaxed">
+          Wake up to a Healen alarm in sleep mode. In test mode you can set any
+          time — once it works we'll make it wake you after 7-9 hours of rest.
+        </p>
+
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-sm font-medium text-white">Enable alarm</p>
+            <p className="text-[11px] text-slate-500">
+              {alarm?.enabled
+                ? `Rings at ${formatAlarmTime(alarm?.time)}`
+                : "Alarm is off"}
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              if (!alarm) return;
+              const next = !alarm.enabled;
+              if (next) {
+                if (IS_NATIVE) {
+                  try {
+                    await LocalNotification.requestPermission();
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }
+                await saveAlarm({ enabled: true, lastFired: null });
+              } else {
+                await saveAlarm({ enabled: false });
+                if (IS_NATIVE) {
+                  try {
+                    await LocalNotification.cancelAlarm();
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }
+              }
+            }}
+            className={cn(
+              "w-12 h-7 rounded-full transition-colors relative",
+              alarm?.enabled ? "bg-indigo-500" : "bg-white/10"
+            )}
+          >
+            <div className={cn(
+              "absolute top-0.5 w-6 h-6 rounded-full bg-white transition-transform",
+              alarm?.enabled ? "translate-x-5" : "translate-x-0.5"
+            )} />
+          </button>
+        </div>
+
+        {alarm?.enabled && (
+          <div className="mb-4">
+            <label className="text-xs text-slate-400 mb-1.5 block">Alarm time</label>
+            <input
+              type="time"
+              value={alarm.time || "07:00"}
+              onChange={(e) => saveAlarm({ time: e.target.value })}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-400/50"
+            />
+          </div>
+        )}
+
+        <p className="text-xs text-slate-400 mb-2">Alarm sound</p>
+        <div className="space-y-2 mb-4">
+          <button
+            onClick={() => saveAlarm({ sound: "default" })}
+            className={cn(
+              "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left",
+              alarm?.sound === "default" || !alarm?.sound
+                ? "bg-indigo-500/15 border-indigo-400/40"
+                : "bg-white/5 border-white/5"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <Music className={cn("w-4 h-4", alarm?.sound === "default" || !alarm?.sound ? "text-indigo-300" : "text-slate-500")} />
+              <p className={cn("text-sm font-medium", alarm?.sound === "default" || !alarm?.sound ? "text-indigo-200" : "text-slate-300")}>
+                Default ringtone
+              </p>
+            </div>
+            <div className={cn(
+              "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+              alarm?.sound === "default" || !alarm?.sound ? "border-indigo-400 bg-indigo-500/30" : "border-white/20"
+            )}>
+              {(alarm?.sound === "default" || !alarm?.sound) && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              if (hasCustomAudio) saveAlarm({ sound: "custom" });
+              else alarmFileRef.current?.click();
+            }}
+            className={cn(
+              "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left",
+              alarm?.sound === "custom"
+                ? "bg-indigo-500/15 border-indigo-400/40"
+                : "bg-white/5 border-white/5"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <Upload className={cn("w-4 h-4", alarm?.sound === "custom" ? "text-indigo-300" : "text-slate-500")} />
+              <div>
+                <p className={cn("text-sm font-medium", alarm?.sound === "custom" ? "text-indigo-200" : "text-slate-300")}>
+                  {hasCustomAudio ? "My own audio" : "Upload your own"}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {hasCustomAudio ? "Custom alarm sound selected" : "MP3 or other audio file"}
+                </p>
+              </div>
+            </div>
+            <div className={cn(
+              "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+              alarm?.sound === "custom" ? "border-indigo-400 bg-indigo-500/30" : "border-white/20"
+            )}>
+              {alarm?.sound === "custom" && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
+            </div>
+          </button>
+
+          <input
+            ref={alarmFileRef}
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              if (file.size > 3 * 1024 * 1024) {
+                toast({ title: "File too large", description: "Please use an audio file under 3 MB.", variant: "destructive" });
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = async () => {
+                const ok = saveCustomAudio(reader.result);
+                if (!ok) {
+                  toast({ title: "Could not store audio", description: "This file is too large for this device.", variant: "destructive" });
+                  return;
+                }
+                setHasCustomAudio(true);
+                await saveAlarm({ sound: "custom" });
+                toast({ title: "Alarm sound set", description: "Your custom audio is now the alarm sound." });
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+
+          {hasCustomAudio && (
+            <button
+              onClick={() => {
+                clearCustomAudio();
+                setHasCustomAudio(false);
+                saveAlarm({ sound: "default" });
+                toast({ title: "Custom audio removed", description: "Alarm is back to the default ringtone." });
+              }}
+              className="w-full py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-medium hover:bg-rose-500/20 transition-colors"
+            >
+              Remove my custom audio
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={playAlarmTest}
+          disabled={!alarm}
+          className="w-full py-3 rounded-xl bg-indigo-500/15 border border-indigo-400/30 text-indigo-200 text-sm font-medium flex items-center justify-center gap-2 hover:bg-indigo-500/25 transition-colors disabled:opacity-50"
+        >
+          {alarmTesting ? (
+            <><div className="w-3.5 h-3.5 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin" /> Playing... tap to stop</>
+          ) : (
+            <><Volume2 className="w-4 h-4" /> Test alarm sound</>
+          )}
+        </button>
+        <p className="text-[10px] text-slate-500 mt-2">
+          Tap again while playing to stop. In test mode you can also set the alarm
+          to any time from sleep mode.
+        </p>
       </Section>
 
       {/* Backup & Restore */}

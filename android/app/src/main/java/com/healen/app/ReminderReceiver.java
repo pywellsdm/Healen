@@ -12,16 +12,38 @@ import android.os.Build;
 
 public class ReminderReceiver extends BroadcastReceiver {
     private static final String CHANNEL_ID = "daily_checkin";
+    private static final String ALARM_CHANNEL_ID = "sleep_alarm";
 
     @Override
     public void onReceive(Context ctx, Intent intent) {
+        boolean isAlarm = intent.getAction() != null && intent.getAction().equals("com.healen.app.ALARM");
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
 
+        String channelId;
+        String channelName;
+        String title;
+        String text;
+        int id;
+        if (isAlarm) {
+            channelId = ALARM_CHANNEL_ID;
+            channelName = "Sleep Alarm";
+            title = "Time to wake up";
+            text = "Your Healen alarm is ringing. Rise and shine!";
+            id = 1002;
+        } else {
+            channelId = CHANNEL_ID;
+            channelName = "Daily Check-in";
+            title = "Time to check in";
+            text = "How's your streak doing today?";
+            id = 1001;
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
-                    CHANNEL_ID, "Daily Check-in", NotificationManager.IMPORTANCE_HIGH);
-            ch.setDescription("Daily reminder to check in with your streak");
+                    channelId, channelName, NotificationManager.IMPORTANCE_HIGH);
+            ch.setDescription(isAlarm ? "Wake-up alarm for sleep mode" : "Daily reminder to check in with your streak");
+            ch.enableVibration(true);
             nm.createNotificationChannel(ch);
         }
 
@@ -31,16 +53,18 @@ public class ReminderReceiver extends BroadcastReceiver {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? new Notification.Builder(ctx, CHANNEL_ID)
+                ? new Notification.Builder(ctx, channelId)
                 : new Notification.Builder(ctx);
         Notification n = builder
-                .setContentTitle("Time to check in")
-                .setContentText("How's your streak doing today?")
+                .setContentTitle(title)
+                .setContentText(text)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .build();
-        nm.notify(1001, n);
+        nm.notify(id, n);
+
+        if (isAlarm) return; // one-shot alarm — do not reschedule
 
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (am != null) {

@@ -21,6 +21,7 @@ import { useState, useEffect } from 'react';
 import SplashScreen from '@/components/SplashScreen';
 import Onboarding from '@/pages/Onboarding';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import AlarmSystem from '@/components/AlarmSystem';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated: isAuthed } = useAuth();
@@ -68,15 +69,17 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
-          <ThemeProvider>
-            <ModeProvider>
-              <Router>
-                <ScrollToTop />
+        <ThemeProvider>
+          <ModeProvider>
+            <Router>
+              <ScrollToTop />
+              <AlarmSystem>
                 <AuthenticatedApp />
-              </Router>
-              <Toaster />
-            </ModeProvider>
-          </ThemeProvider>
+              </AlarmSystem>
+            </Router>
+            <Toaster />
+          </ModeProvider>
+        </ThemeProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ErrorBoundary>
