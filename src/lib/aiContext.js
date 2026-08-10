@@ -1,6 +1,8 @@
 // Builds a context string from the user's recovery data for the AI coach
 import { db } from "@/lib/store";
-import { ensureStreakRecord, calculateStreakDays } from "@/lib/streakUtils";
+import { ensureStreakRecord, calculateStreakDays, sleepElapsedMin, formatDuration } from "@/lib/streakUtils";
+import { getAlarmSettings, alarmTargetMs, formatAlarmTime } from "@/lib/alarm";
+import { getNextMilestone } from "@/lib/milestones";
 import { TRIGGER_LABELS, MOOD_LABELS } from "@/lib/motivation";
 
 export const SLEEP_PLAN_LABELS = {
@@ -13,9 +15,10 @@ export const SLEEP_PLAN_LABELS = {
 export async function buildAIContext() {
   const streak = await ensureStreakRecord();
   const currentDays = calculateStreakDays(streak.streak_start_date);
-  const [checkIns, relapses] = await Promise.all([
+  const [checkIns, relapses, alarm] = await Promise.all([
     db.entities.CheckIn.filter({}, "-checkin_date", 30),
     db.entities.Relapse.filter({}, "-relapse_date", 50),
+    getAlarmSettings(),
   ]);
 
   const recentRelapses = (relapses || []).slice(0, 5).map((r) =>
@@ -35,8 +38,30 @@ export async function buildAIContext() {
     .slice(0, 3)
     .map(([t, c]) => `${TRIGGER_LABELS[t] || t} (${c}x)`);
 
+  // Live sleep + alarm state
+  const sessionStart = streak.sleep_session_start;
+  let sleepState = "not currently in a sleep session";
+  let alarmLine = `- Alarm: ${alarm.enabled ? `on, rings ${formatAlarmTime(sessionStart, alarm.durationMin)}` : "off"}`;
+  if (sessionStart) {
+    const elapsed = sleepElapsedMin(streak);
+    sleepState = `currently in a sleep session (started, ${formatDuration(elapsed)} elapsed)`;
+    if (alarm.enabled) {
+      const remaining = Math.max(0, Math.round((alarmTargetMs(sessionStart, alarm.durationMin) - Date.now()) / 60000));
+      alarmLine = `- Alarm: on, rings ${formatAlarmTime(sessionStart, alarm.durationMin)} (in about ${formatDuration(remaining)})`;
+    }
+  }
+
+  // Next milestone context
+  const nextM = getNextMilestone(currentDays);
+  const milestoneLine = nextM && nextM.days > currentDays
+    ? `- Next milestone: ${nextM.title} at ${nextM.days} days (${nextM.days - currentDays} days away)`
+    : "- Next milestone: none remaining";
+
   return {
     streak,
+    alarm,
+    currentDays,
+    sleepState,
     contextText: `USER RECOVERY DATA:
 - Current streak: ${currentDays} days
 - Longest streak: ${streak.longest_streak_days || 0} days
@@ -53,7 +78,10 @@ export async function buildAIContext() {
 - Best sleep streak: ${streak.sleep_longest_streak_days || 0} nights
 - Total nights slept: ${streak.sleep_total_nights || 0}
 - Sleep resets: ${streak.sleep_total_resets || 0}
+- Sleep state: ${sleepState}
 - Daily check-in streak: ${streak.daily_goal_streak || 0}
+${alarmLine}
+${milestoneLine}
 
 RECENT CHECK-INS (last 7):
 ${recentCheckIns.length ? recentCheckIns.join("\n") : "No check-ins yet"}

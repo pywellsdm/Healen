@@ -67,6 +67,7 @@ export default function AICoach() {
   const [persona, setPersona] = useState("mentor");
   const [context, setContext] = useState("");
   const [streak, setStreak] = useState(null);
+  const [alarmInfo, setAlarmInfo] = useState(null);
   const scrollRef = useRef(null);
   const chatsRef = useRef([]);
 
@@ -79,6 +80,7 @@ export default function AICoach() {
         setConfig(cfg);
         setContext(ctx.contextText);
         setStreak(ctx.streak);
+        setAlarmInfo(ctx.alarm);
         setPersona(savedPersona);
         chatsRef.current = savedChats;
         setChats(savedChats);
@@ -344,7 +346,11 @@ export default function AICoach() {
               </span>
               {streak?.sleep_plan
                 ? ` aiming for ${SLEEP_PLAN_LABELS[streak.sleep_plan] || streak.sleep_plan} a night`
-                : ""}. What's on your mind?
+                : ""}.{" "}
+              {alarmInfo?.enabled && (
+                <>Your Healen alarm is armed to wake you after your rest.</>
+              )}{" "}
+              What's on your mind?
             </p>
           </div>
 

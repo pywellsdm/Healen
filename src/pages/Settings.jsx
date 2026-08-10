@@ -7,7 +7,7 @@ import { requestNotificationPermission } from "@/lib/notifications";
 import { IS_NATIVE } from "@/lib/appInfo";
 import { AI_PERSONAS } from "@/lib/aiContext";
 import { useAlarm } from "@/components/AlarmSystem";
-import { getAlarmAudioSrc, saveCustomAudio, clearCustomAudio, formatAlarmTime } from "@/lib/alarm";
+import { getAlarmAudioSrc, saveCustomAudio, clearCustomAudio, hasCustomAudio as hasCustomAudioStored, durationLabel } from "@/lib/alarm";
 import { LocalNotification } from "@/lib/localNotifications";
 import {
   User, Bell, Heart, Target, Save, Sparkles, Trash2,
@@ -97,10 +97,17 @@ export default function Settings() {
     setAlarmTesting(false);
   };
 
-  const playAlarmTest = () => {
+  const playAlarmTest = async () => {
     if (!alarm) return;
     stopAlarmTest();
-    const a = new Audio(getAlarmAudioSrc(alarm));
+    const a = new Audio();
+    try {
+      a.src = await getAlarmAudioSrc(alarm);
+    } catch (e) {
+      toast({ title: "Playback failed", description: "Could not load this audio.", variant: "destructive" });
+      setAlarmTesting(false);
+      return;
+    }
     alarmAudioRef.current = a;
     a.loop = false;
     a.volume = 1;
@@ -145,11 +152,7 @@ export default function Settings() {
         setNotifState("Notification" in window ? Notification.permission : "denied");
         const cfg = await db.ai.getConfig();
         setAiConfig(cfg);
-        try {
-          setHasCustomAudio(!!localStorage.getItem("healen:alarm:audio"));
-        } catch (err) {
-          /* ignore */
-        }
+        setHasCustomAudio(await hasCustomAudioStored());
       } catch (e) {
         console.error(e);
       } finally {
@@ -710,8 +713,9 @@ export default function Settings() {
       {/* Sleep Alarm */}
       <Section icon={AlarmClock} title="Sleep Alarm">
         <p className="text-xs text-slate-400 mb-3 leading-relaxed">
-          Wake up to a Healen alarm in sleep mode. In test mode you can set any
-          time — once it works we'll make it wake you after 7-9 hours of rest.
+          Wake up to a Healen alarm after a healthy night of rest. It rings
+          once, 7-9 hours after your sleep session starts — then never again
+          until your next night.
         </p>
 
         <div className="flex items-center justify-between mb-4">
@@ -719,7 +723,7 @@ export default function Settings() {
             <p className="text-sm font-medium text-white">Enable alarm</p>
             <p className="text-[11px] text-slate-500">
               {alarm?.enabled
-                ? `Rings at ${formatAlarmTime(alarm?.time)}`
+                ? `Rings after ${durationLabel(alarm?.durationMin)} of rest`
                 : "Alarm is off"}
             </p>
           </div>
@@ -735,7 +739,7 @@ export default function Settings() {
                     console.error(e);
                   }
                 }
-                await saveAlarm({ enabled: true, lastFired: null });
+                await saveAlarm({ enabled: true });
               } else {
                 await saveAlarm({ enabled: false });
                 if (IS_NATIVE) {
@@ -761,13 +765,29 @@ export default function Settings() {
 
         {alarm?.enabled && (
           <div className="mb-4">
-            <label className="text-xs text-slate-400 mb-1.5 block">Alarm time</label>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-xs text-slate-400">Sleep goal</label>
+              <span className="text-xs font-bold text-indigo-300 tabular-nums">
+                {durationLabel(alarm.durationMin)}
+              </span>
+            </div>
             <input
-              type="time"
-              value={alarm.time || "07:00"}
-              onChange={(e) => saveAlarm({ time: e.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-400/50"
+              type="range"
+              min="420"
+              max="540"
+              step="15"
+              value={alarm.durationMin}
+              onChange={(e) => saveAlarm({ durationMin: Number(e.target.value) })}
+              className="w-full"
             />
+            <p className="text-[10px] text-slate-500 mt-1 flex justify-between">
+              <span>7h</span>
+              <span>8h</span>
+              <span>9h</span>
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Your alarm rings after this much rest, once per night, from sleep mode.
+            </p>
           </div>
         )}
 
@@ -842,7 +862,7 @@ export default function Settings() {
               }
               const reader = new FileReader();
               reader.onload = async () => {
-                const ok = saveCustomAudio(reader.result);
+                const ok = await saveCustomAudio(reader.result);
                 if (!ok) {
                   toast({ title: "Could not store audio", description: "This file is too large for this device.", variant: "destructive" });
                   return;
@@ -857,10 +877,10 @@ export default function Settings() {
 
           {hasCustomAudio && (
             <button
-              onClick={() => {
-                clearCustomAudio();
+              onClick={async () => {
+                await clearCustomAudio();
                 setHasCustomAudio(false);
-                saveAlarm({ sound: "default" });
+                await saveAlarm({ sound: "default" });
                 toast({ title: "Custom audio removed", description: "Alarm is back to the default ringtone." });
               }}
               className="w-full py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-medium hover:bg-rose-500/20 transition-colors"
@@ -882,8 +902,8 @@ export default function Settings() {
           )}
         </button>
         <p className="text-[10px] text-slate-500 mt-2">
-          Tap again while playing to stop. In test mode you can also set the alarm
-          to any time from sleep mode.
+          Tap again while playing to stop. This only previews the sound — the
+          real alarm rings in sleep mode after your set hours of rest.
         </p>
       </Section>
 

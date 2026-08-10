@@ -11,12 +11,12 @@ import ModeSwitcher from "@/components/ModeSwitcher";
 import RelapseModal from "@/components/streak/RelapseModal";
 import RelapseRecovery from "@/components/streak/RelapseRecovery";
 import Celebration from "@/components/Celebration";
-import { AlertTriangle, TrendingUp, Flame, Moon, Calendar, ChevronRight, Target, AlarmClock, BellOff } from "lucide-react";
+import { AlertTriangle, TrendingUp, Flame, Moon, Calendar, ChevronRight, Target, AlarmClock } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "@/lib/store";
 import { useMode } from "@/lib/ModeContext";
 import { useAlarm } from "@/components/AlarmSystem";
-import { formatAlarmTime, minutesUntilAlarm } from "@/lib/alarm";
+import { formatAlarmTime, minutesUntilAlarm, durationLabel } from "@/lib/alarm";
 import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
@@ -30,7 +30,7 @@ export default function Dashboard() {
   const [currentDays, setCurrentDays] = useState(0);
   const [progressDays, setProgressDays] = useState(0);
   const [celebration, setCelebration] = useState(null);
-  const { settings: alarm, save: saveAlarm, triggerNow } = useAlarm();
+  const { settings: alarm, save: saveAlarm } = useAlarm();
   const [alarmTick, setAlarmTick] = useState(Date.now());
 
   const loadStreak = async () => {
@@ -140,6 +140,12 @@ export default function Dashboard() {
   const sleepBest = Math.max(streak?.sleep_longest_streak_days || 0, streak?.sleep_current_streak_days || 0);
   const sleepDays = sleeping ? streak?.sleep_current_streak_days || 0 : 0;
 
+  const sleepSessionStart = streak?.sleep_session_start;
+  const ringTime = sleepSessionStart ? formatAlarmTime(sleepSessionStart, alarm?.durationMin) : null;
+  const ringCountdown = alarm?.enabled && sleepSessionStart
+    ? `${minutesUntilAlarm(alarm, streak, new Date(alarmTick)) ?? 0} min`
+    : null;
+
   return (
     <motion.div
       className="px-5 pt-12 pb-4"
@@ -224,28 +230,28 @@ export default function Dashboard() {
           <div className="mb-6">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-400/30 flex items-center justify-center">
-                  <AlarmClock className="w-5 h-5 text-rose-300" />
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+                  <AlarmClock className="w-5 h-5 text-indigo-300" />
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-white">Wake-up Alarm</p>
                   <p className="text-xs text-slate-400">
                     {alarm?.enabled
-                      ? `Set for ${formatAlarmTime(alarm.time || "07:00")}`
+                      ? ringTime
+                        ? `Rings at ${ringTime}`
+                        : "Armed for tonight"
                       : "Alarm is off"}
                   </p>
                 </div>
                 <button
                   onClick={async () => {
                     if (!alarm) return;
-                    const next = !alarm.enabled;
-                    if (next) await saveAlarm({ enabled: true, lastFired: null });
-                    else await saveAlarm({ enabled: false });
+                    await saveAlarm({ enabled: !alarm.enabled });
                   }}
                   aria-label="Toggle alarm"
                   className={cn(
                     "w-12 h-7 rounded-full transition-colors relative shrink-0",
-                    alarm?.enabled ? "bg-rose-500" : "bg-white/10"
+                    alarm?.enabled ? "bg-indigo-500" : "bg-white/10"
                   )}
                 >
                   <div className={cn(
@@ -256,40 +262,34 @@ export default function Dashboard() {
               </div>
 
               {alarm?.enabled && (
-                <div className="mb-3">
-                  <label className="text-xs text-slate-400 mb-1.5 block">Alarm time</label>
+                <div className="mb-2">
+                  <div className="flex justify-between mb-1">
+                    <label className="text-xs text-slate-400">Sleep goal</label>
+                    <span className="text-xs font-bold text-indigo-300 tabular-nums">
+                      {durationLabel(alarm.durationMin)}
+                    </span>
+                  </div>
                   <input
-                    type="time"
-                    value={alarm.time || "07:00"}
-                    onChange={(e) => saveAlarm({ time: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-rose-400/50"
+                    type="range"
+                    min="420"
+                    max="540"
+                    step="15"
+                    value={alarm.durationMin}
+                    onChange={(e) => saveAlarm({ durationMin: Number(e.target.value) })}
+                    className="w-full"
                   />
+                  <p className="text-[10px] text-slate-500 mt-1 flex justify-between">
+                    <span>7h</span>
+                    <span>8h</span>
+                    <span>9h</span>
+                  </p>
                   <p className="text-[11px] text-slate-500 mt-1.5">
-                    {alarm.lastFired
-                      ? "Rang today — flip it off and on to test again."
-                      : `${minutesUntilAlarm(alarm, new Date(alarmTick))} min until it rings`}
+                    {ringTime
+                      ? `${ringCountdown} until it rings`
+                      : "Your alarm rings after 7-9 hours of rest, once per night."}
                   </p>
                 </div>
               )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={triggerNow}
-                  className="flex-1 py-3 rounded-xl bg-rose-500/15 border border-rose-400/30 text-rose-200 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-rose-500/25 transition-colors"
-                >
-                  <AlarmClock className="w-4 h-4" />
-                  Test alarm now
-                </button>
-                {alarm?.enabled && alarm.lastFired && (
-                  <button
-                    onClick={() => saveAlarm({ enabled: true, lastFired: null })}
-                    className="px-3 py-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm flex items-center justify-center gap-1.5 hover:bg-white/10 transition-colors"
-                  >
-                    <BellOff className="w-4 h-4" />
-                    Re-arm
-                  </button>
-                )}
-              </div>
             </div>
           </div>
 

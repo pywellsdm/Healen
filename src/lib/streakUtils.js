@@ -41,6 +41,10 @@ export async function ensureStreakRecord() {
     sleep_total_resets: 0,
     sleep_last_success_date: null,
     sleep_last_duration_min: null,
+    alarm_enabled: false,
+    alarm_duration_min: 480,
+    alarm_sound: "default",
+    alarm_last_fired_session: null,
   });
 }
 

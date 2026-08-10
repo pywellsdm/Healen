@@ -6,14 +6,16 @@ import {
   saveAlarmSettings,
   getAlarmAudioSrc,
   isAlarmDue,
-  alreadyFired,
-  todayStr,
+  alarmTargetMs,
   formatAlarmTime,
+  durationLabel,
 } from "@/lib/alarm";
+import { ensureStreakRecord } from "@/lib/streakUtils";
 import { LocalNotification } from "@/lib/localNotifications";
 import { IS_NATIVE } from "@/lib/appInfo";
 
 const SNOOZE_MINUTES = 5;
+const STREAK_POLL_MS = 15000;
 
 const AlarmContext = createContext(null);
 
@@ -23,9 +25,11 @@ export function useAlarm() {
 
 export default function AlarmSystem({ children }) {
   const [settings, setSettings] = useState(null);
+  const [streak, setStreak] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [snoozeUntil, setSnoozeUntil] = useState(null);
   const settingsRef = useRef(null);
+  const streakRef = useRef(null);
   const snoozeUntilRef = useRef(null);
   const audioRef = useRef(null);
   const ringingRef = useRef(false);
@@ -36,25 +40,49 @@ export default function AlarmSystem({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const s = await getAlarmSettings();
+      const [s, st] = await Promise.all([getAlarmSettings(), ensureStreakRecord()]);
       settingsRef.current = s;
+      streakRef.current = st;
       setSettings(s);
+      setStreak(st);
     } catch (e) {
       /* not authenticated yet — skip */
     }
   }, []);
 
   const save = useCallback(async (patch) => {
-    const updated = await saveAlarmSettings(patch);
+    await saveAlarmSettings(patch);
     const next = { ...settingsRef.current, ...patch };
     settingsRef.current = next;
     setSettings(next);
-    return updated;
   }, []);
 
   // Initial load
   useEffect(() => {
     refresh();
+  }, [refresh]);
+
+  // Keep the sleep session fresh so the alarm knows when the night starts/ends
+  useEffect(() => {
+    const poll = () => {
+      ensureStreakRecord()
+        .then((st) => {
+          streakRef.current = st;
+          setStreak(st);
+        })
+        .catch(() => {});
+    };
+    const t = setInterval(poll, STREAK_POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [refresh]);
 
   // Keep refs in sync
@@ -73,12 +101,16 @@ export default function AlarmSystem({ children }) {
     a.currentTime = 0;
   }, []);
 
-  const ring = useCallback(() => {
+  const ring = useCallback(async () => {
     if (IS_NATIVE) {
       LocalNotification.cancelAlarm().catch(() => {});
     }
     const audio = getAudio();
-    audio.src = getAlarmAudioSrc(settingsRef.current);
+    try {
+      audio.src = await getAlarmAudioSrc(settingsRef.current);
+    } catch (e) {
+      audio.src = "/audio/default-ringtone.mp3";
+    }
     audio.loop = true;
     audio.volume = 1;
     audio.play().catch(() => {});
@@ -89,11 +121,14 @@ export default function AlarmSystem({ children }) {
   const dismiss = useCallback(async () => {
     stopAudio();
     setRinging(false);
-    // Test mode: mark fired for today so it won't re-ring until re-armed.
-    try {
-      await save({ lastFired: todayStr() });
-    } catch (e) {
-      /* ignore */
+    // Fired for this session — it won't ring again tonight.
+    const session = streakRef.current?.sleep_session_start;
+    if (session) {
+      try {
+        await save({ lastFiredSession: session });
+      } catch (e) {
+        /* ignore */
+      }
     }
   }, [save, stopAudio]);
 
@@ -103,54 +138,37 @@ export default function AlarmSystem({ children }) {
     setRinging(false);
   }, [stopAudio]);
 
-  // Re-arm helper (used by UI toggles): clears today's fired marker.
-  const rearm = useCallback(async () => {
-    try {
-      await save({ enabled: true, lastFired: null });
-    } catch (e) {
-      /* ignore */
-    }
-  }, [save]);
-
-  // Native backup: schedule a one-shot system notification at the alarm time
+  // Native backup: schedule a one-shot system notification at the alarm target
   // so the alarm still rings even if the app is in the background.
+  const sessionStart = streak?.sleep_session_start;
   useEffect(() => {
-    if (!settings || !IS_NATIVE) return;
-    if (settings.enabled) {
-      const [h, m] = String(settings.time || "07:00").split(":").map(Number);
-      const d = new Date();
-      d.setHours(h || 0, m || 0, 0, 0);
-      if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
-      LocalNotification.scheduleAlarmOnce(d.getTime()).catch(() => {});
+    if (!IS_NATIVE) return;
+    if (settings?.enabled && sessionStart) {
+      LocalNotification.scheduleAlarmOnce(alarmTargetMs(sessionStart, settings.durationMin)).catch(() => {});
     } else {
       LocalNotification.cancelAlarm().catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings?.enabled, settings?.time]);
+  }, [IS_NATIVE, settings?.enabled, settings?.durationMin, sessionStart]);
 
   // Watcher: every second, check whether the alarm should ring.
   useEffect(() => {
     const t = setInterval(() => {
       const s = settingsRef.current;
-      if (!s || !s.enabled || ringingRef.current) return;
-      if (alreadyFired(s)) return;
+      const st = streakRef.current;
+      if (!s || ringingRef.current) return;
       if (snoozeUntilRef.current && Date.now() < snoozeUntilRef.current) return;
-      if (!isAlarmDue(s)) return;
+      if (!isAlarmDue(s, st)) return;
       ring();
     }, 1000);
     return () => clearInterval(t);
   }, [ring]);
 
-  const triggerNow = useCallback(() => {
-    ring();
-  }, [ring]);
-
   const value = {
     settings,
+    streak,
     refresh,
     save,
-    rearm,
-    triggerNow,
     dismiss,
     snooze,
     ringing,
@@ -162,7 +180,8 @@ export default function AlarmSystem({ children }) {
       <AnimatePresence>
         {ringing && (
           <AlarmOverlay
-            time={settings?.time}
+            settings={settings}
+            streak={streak}
             onDismiss={dismiss}
             onSnooze={snooze}
           />
@@ -172,7 +191,8 @@ export default function AlarmSystem({ children }) {
   );
 }
 
-function AlarmOverlay({ time, onDismiss, onSnooze }) {
+function AlarmOverlay({ settings, streak, onDismiss, onSnooze }) {
+  const ringTime = formatAlarmTime(streak?.sleep_session_start, settings?.durationMin);
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -203,7 +223,7 @@ function AlarmOverlay({ time, onDismiss, onSnooze }) {
         <h2 className="text-3xl font-black text-white mb-2">Time to wake up</h2>
         <p className="text-sm text-slate-300 mb-1">Your Healen alarm is ringing</p>
         <p className="text-xs text-slate-500 mb-8">
-          {time ? `Set for ${formatAlarmTime(time)}` : "Rise and shine"}
+          {ringTime ? `Ringing at ${ringTime} — ${durationLabel(settings?.durationMin)} of rest` : "Rise and shine"}
         </p>
 
         <div className="grid grid-cols-2 gap-3">
