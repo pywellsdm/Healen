@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { checkForUpdate } from "@/lib/updates";
 import { APP_VERSION, IS_NATIVE } from "@/lib/appInfo";
 import { Download, Rocket, X } from "lucide-react";
@@ -6,13 +6,33 @@ import { Download, Rocket, X } from "lucide-react";
 export default function UpdateBanner() {
   const [update, setUpdate] = useState(null);
   const [dismissed, setDismissed] = useState(false);
+  const dismissedRef = useRef(false);
 
-  useEffect(() => {
-    (async () => {
-      const result = await checkForUpdate();
-      if (result) setUpdate(result);
-    })();
+  const dismiss = () => {
+    dismissedRef.current = true;
+    setDismissed(true);
+  };
+
+  const run = useCallback(async () => {
+    if (dismissedRef.current) return;
+    const result = await checkForUpdate({ force: true });
+    if (result && !dismissedRef.current) setUpdate(result);
   }, []);
+
+  // Check on mount AND whenever the app comes back to the foreground, so a
+  // release that drops while the app is open still shows up.
+  useEffect(() => {
+    run();
+    const onVisible = () => {
+      if (!document.hidden) run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [run]);
 
   if (!update || dismissed) return null;
 
@@ -34,7 +54,7 @@ export default function UpdateBanner() {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative pointer-events-auto w-full max-w-xs bg-[#0E0F1A]/95 border border-white/15 rounded-3xl p-6 text-center shadow-2xl animate-pop-in">
         <button
-          onClick={() => setDismissed(true)}
+          onClick={dismiss}
           className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-slate-400"
           aria-label="Dismiss"
         >
@@ -61,7 +81,7 @@ export default function UpdateBanner() {
           Download v{update.version}
         </button>
         <button
-          onClick={() => setDismissed(true)}
+          onClick={dismiss}
           className="mt-2 w-full py-2.5 rounded-xl bg-white/5 text-slate-300 text-xs font-medium hover:bg-white/10 transition-colors"
         >
           Not now
