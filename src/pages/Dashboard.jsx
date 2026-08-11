@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, getNextGoal, getTotalAppDays } from "@/lib/streakUtils";
 import { getRecentMilestone, SLEEP_MILESTONES } from "@/lib/milestones";
@@ -103,6 +103,37 @@ export default function Dashboard() {
     const t = setInterval(() => setAlarmTick(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  // Celebrate the moment a new streak day rolls over — even without a check-in.
+  const lastNotifiedDayRef = useRef(null);
+  useEffect(() => {
+    if (!streak?.streak_start_date) return;
+    lastNotifiedDayRef.current = calculateStreakDays(streak.streak_start_date);
+  }, [streak?.streak_start_date]);
+
+  useEffect(() => {
+    if (!streak?.streak_start_date) return;
+    const t = setInterval(() => {
+      const days = calculateStreakDays(streak.streak_start_date);
+      const prev = lastNotifiedDayRef.current;
+      if (prev == null) {
+        lastNotifiedDayRef.current = days;
+        return;
+      }
+      if (days > prev) {
+        lastNotifiedDayRef.current = days;
+        if (!sleeping) {
+          loadStreak()
+            .then((res) => {
+              setCelebration(res.celebration || { type: "checkin", day: Math.max(days, 1) });
+            })
+            .catch(() => {});
+        }
+      }
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streak?.streak_start_date, sleeping]);
 
   const handleRelapseComplete = (data) => {
     setShowRelapse(false);

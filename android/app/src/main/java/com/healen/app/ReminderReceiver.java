@@ -8,6 +8,8 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.os.Build;
 
 public class ReminderReceiver extends BroadcastReceiver {
@@ -41,9 +43,21 @@ public class ReminderReceiver extends BroadcastReceiver {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
-                    channelId, channelName, NotificationManager.IMPORTANCE_HIGH);
+                    channelId, channelName,
+                    isAlarm ? NotificationManager.IMPORTANCE_MAX : NotificationManager.IMPORTANCE_HIGH);
             ch.setDescription(isAlarm ? "Wake-up alarm for sleep mode" : "Daily reminder to check in with your streak");
-            ch.enableVibration(true);
+            if (isAlarm) {
+                // A real alarm: loud system alarm tone, repeated vibration.
+                ch.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                        new AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ALARM)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build());
+                ch.enableVibration(true);
+                ch.setVibrationPattern(new long[]{0, 800, 400, 800, 400, 1200});
+            } else {
+                ch.enableVibration(true);
+            }
             nm.createNotificationChannel(ch);
         }
 

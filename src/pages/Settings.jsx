@@ -891,7 +891,7 @@ export default function Settings() {
         </div>
 
         <button
-          onClick={playAlarmTest}
+          onClick={alarmTesting ? stopAlarmTest : playAlarmTest}
           disabled={!alarm}
           className="w-full py-3 rounded-xl bg-indigo-500/15 border border-indigo-400/30 text-indigo-200 text-sm font-medium flex items-center justify-center gap-2 hover:bg-indigo-500/25 transition-colors disabled:opacity-50"
         >

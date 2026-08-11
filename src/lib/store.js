@@ -476,6 +476,89 @@ async function chatRequest(cfg, messages) {
   return content.trim();
 }
 
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Stream a reply token-by-token via SSE. onChunk receives each delta of text.
+async function chatStreamRequest(cfg, messages, onChunk) {
+  const provider = AI_PROVIDERS[cfg.provider] || AI_PROVIDERS.openai;
+  const base = (cfg.baseUrl || provider.baseUrl || "").replace(/\/+$/, "");
+  if (!base) throw new Error("Missing API base URL");
+  const url = base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
+  const model = cfg.model || provider.model || "gpt-4o-mini";
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cfg.apiKey}`,
+      },
+      body: JSON.stringify({ model, messages, stream: true }),
+    });
+  } catch (err) {
+    throw new Error(`Could not reach ${base}. Check the URL and your connection.`);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    const hint = text.length ? ` ${text.slice(0, 300)}` : "";
+    throw new Error(`AI request failed (${res.status}).${hint}`);
+  }
+  if (!res.body) {
+    // Fallback: some endpoints ignore stream — grab the whole reply.
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("The AI returned an empty response.");
+    onChunk(content);
+    return content.trim();
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+  let finished = false;
+  while (!finished) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === "[DONE]") {
+        finished = true;
+        break;
+      }
+      try {
+        const j = JSON.parse(data);
+        const delta = j.choices?.[0]?.delta?.content;
+        if (delta) {
+          full += delta;
+          onChunk(delta);
+        }
+      } catch {
+        /* partial JSON line — skip */
+      }
+    }
+  }
+  return full.trim();
+}
+
+// Simulated streaming for the offline coach so it "types" instead of teleporting.
+async function localCoachStream(messages, onChunk) {
+  const reply = localCoachReply(messages);
+  const words = reply.split(/(\s+)/);
+  let full = "";
+  for (const w of words) {
+    full += w;
+    onChunk(w);
+    await delay(8 + Math.random() * 18);
+  }
+  return full;
+}
+
 export const ai = {
   async getConfig() {
     const username = currentUsername();
@@ -518,6 +601,10 @@ export const ai = {
   async chat(cfg, { messages }) {
     if (cfg.provider === "local" || !cfg.apiKey) return localCoachReply(messages);
     return chatRequest(cfg, messages);
+  },
+  async chatStream(cfg, { messages }, onChunk = () => {}) {
+    if (cfg.provider === "local" || !cfg.apiKey) return localCoachStream(messages, onChunk);
+    return chatStreamRequest(cfg, messages, onChunk);
   },
   async test(cfg) {
     if (cfg.provider === "local") return "Offline coach is always available.";

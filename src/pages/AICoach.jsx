@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, AI_PROVIDERS } from "@/lib/store";
-import { buildAIContext, AI_PERSONAS, SLEEP_PLAN_LABELS } from "@/lib/aiContext";
+import { buildAIContext, buildChatMemory, AI_PERSONAS, SLEEP_PLAN_LABELS } from "@/lib/aiContext";
 import { ensureStreakRecord, calculateStreakDays } from "@/lib/streakUtils";
 import {
   Bot,
@@ -13,6 +13,7 @@ import {
   Trash2,
   ArrowLeft,
   Settings,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +69,7 @@ export default function AICoach() {
   const [context, setContext] = useState("");
   const [streak, setStreak] = useState(null);
   const [alarmInfo, setAlarmInfo] = useState(null);
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
   const scrollRef = useRef(null);
   const chatsRef = useRef([]);
 
@@ -110,6 +112,7 @@ export default function AICoach() {
         title: existing?.title || chatTitle(msgs),
         provider: provider || config.provider,
         persona: personaName || persona,
+        memory: memoryEnabled,
         createdAt: existing?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         messages: msgs,
@@ -117,6 +120,22 @@ export default function AICoach() {
       const saved = await db.ai.saveChat(chat);
       chatsRef.current = [saved, ...chatsRef.current.filter((c) => c.id !== chatId)];
       setChats(chatsRef.current);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const toggleMemory = async (next) => {
+    setMemoryEnabled(next);
+    if (!activeChatId) return;
+    try {
+      const allChats = await db.ai.getChats();
+      const existing = allChats.find((c) => c.id === activeChatId);
+      if (existing) {
+        const saved = await db.ai.saveChat({ ...existing, memory: next });
+        chatsRef.current = [saved, ...chatsRef.current.filter((c) => c.id !== activeChatId)];
+        setChats(chatsRef.current);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -132,10 +151,24 @@ export default function AICoach() {
 
     const personaConfig = AI_PERSONAS[persona];
     const customPrompt = streak?.custom_persona_prompt;
-    const sys =
+    let sys =
       persona === "custom"
         ? `${customPrompt || "You are a supportive recovery companion helping with quitting porn and gooning. Stay fully in character, be warm and encouraging, and reference the user's data."}\n\n${context}`
         : `${personaConfig.system}\n\n${context}`;
+
+    // Long-term memory: this chat can see the user's past conversations.
+    if (memoryEnabled) {
+      try {
+        const allChats = await db.ai.getChats();
+        const mem = buildChatMemory(allChats, activeChatId);
+        if (mem) {
+          sys = `${sys}\n\nLONG-TERM MEMORY (the user's past chats):\n${mem}\n\nUse this to remember who they are and what they've shared. Don't mention having this memory unless asked.`;
+        }
+      } catch (e) {
+        /* ignore memory errors */
+      }
+    }
+
     const apiMessages = [
       { role: "system", content: sys },
       ...nextMessages,
@@ -144,11 +177,23 @@ export default function AICoach() {
     const chatId = activeChatId || newId();
     if (!activeChatId) setActiveChatId(chatId);
 
+    // Assistant placeholder that fills in live as the text streams.
+    const assistantBase = { role: "assistant", content: "", createdAt: new Date().toISOString() };
+    setMessages([...nextMessages, assistantBase]);
+
     try {
-      const reply = await db.ai.chat(config, { messages: apiMessages });
+      let streamed = "";
+      const reply = await db.ai.chatStream(config, { messages: apiMessages }, (chunk) => {
+        streamed += chunk;
+        setMessages((prev) => {
+          const arr = [...prev];
+          arr[arr.length - 1] = { ...assistantBase, content: streamed };
+          return arr;
+        });
+      });
       const finalMessages = [
         ...nextMessages,
-        { role: "assistant", content: reply || "I'm here. What's on your mind?", createdAt: new Date().toISOString() },
+        { ...assistantBase, content: reply || streamed || "I'm here. What's on your mind?" },
       ];
       setMessages(finalMessages);
       await persist(chatId, finalMessages, persona, config.provider);
@@ -183,12 +228,14 @@ export default function AICoach() {
   const startNewChat = () => {
     setActiveChatId(null);
     setMessages([]);
+    setMemoryEnabled(true);
     setHistoryOpen(false);
   };
 
   const openChat = (c) => {
     setActiveChatId(c.id);
     setMessages(c.messages || []);
+    setMemoryEnabled(c.memory !== false);
     if (c.persona) setPersona(c.persona);
     setHistoryOpen(false);
   };
@@ -427,12 +474,22 @@ export default function AICoach() {
                     : "bg-gradient-to-br from-indigo-500 to-purple-500 text-white"
                 )}
               >
-                {msg.content}
+                {msg.content || (loading && msg.role === "assistant") ? (
+                  msg.content || (
+                    <span className="flex items-center gap-1 py-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </span>
+                  )
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}
 
-          {loading && (
+          {loading && messages[messages.length - 1]?.role !== "assistant" && (
             <div className="flex gap-2.5">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center shrink-0">
                 <Bot className="w-4 h-4 text-indigo-300" />
@@ -451,21 +508,47 @@ export default function AICoach() {
 
       {/* Input */}
       {!historyOpen && (
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send(input)}
-            placeholder={config.provider === "local" ? "Talk to your offline coach..." : `Chat with ${providerName}...`}
-            className="flex-1 glass rounded-full px-4 py-3 text-sm text-white light:text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400/30"
-          />
-          <button
-            onClick={() => send(input)}
-            disabled={loading || !input.trim()}
-            className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white disabled:opacity-40 shrink-0"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-[10px] uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Brain className="w-3.5 h-3.5 text-indigo-400" />
+              AI memory
+            </label>
+            <button
+              onClick={() => toggleMemory(!memoryEnabled)}
+              aria-label="Toggle AI memory"
+              className={cn(
+                "w-10 h-6 rounded-full transition-colors relative",
+                memoryEnabled ? "bg-indigo-500" : "bg-white/10"
+              )}
+            >
+              <div className={cn(
+                "absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform",
+                memoryEnabled ? "translate-x-[18px]" : "translate-x-0.5"
+              )} />
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-600 -mt-1 mb-2">
+            {memoryEnabled
+              ? "On: this chat remembers your past conversations and data."
+              : "Off: this chat starts fresh with no memory of other chats."}
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send(input)}
+              placeholder={config.provider === "local" ? "Talk to your offline coach..." : `Chat with ${providerName}...`}
+              className="flex-1 glass rounded-full px-4 py-3 text-sm text-white light:text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400/30"
+            />
+            <button
+              onClick={() => send(input)}
+              disabled={loading || !input.trim()}
+              className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white disabled:opacity-40 shrink-0"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>

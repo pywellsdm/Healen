@@ -12,6 +12,24 @@ export const SLEEP_PLAN_LABELS = {
   eight_nine: "8–9 hours",
 };
 
+// Build a bounded "long-term memory" from the user's other chats so the AI
+// can remember past conversations when a chat has memory enabled.
+export function buildChatMemory(chats, excludeId, maxChars = 4000) {
+  const others = (chats || []).filter((c) => c.id !== excludeId && c.memory !== false);
+  const parts = [];
+  for (const c of others.slice(0, 6)) {
+    const msgs = (c.messages || [])
+      .filter((m) => m.role !== "system")
+      .slice(-8)
+      .map((m) => `${m.role === "user" ? "User" : "You"}: ${m.content}`);
+    if (!msgs.length) continue;
+    parts.push(`--- Past chat: ${c.title || "Untitled"} ---\n${msgs.join("\n")}`);
+  }
+  const text = parts.join("\n\n");
+  if (!text.trim()) return "";
+  return text.length > maxChars ? `${text.slice(0, maxChars)}\n[...]` : text;
+}
+
 export async function buildAIContext() {
   const streak = await ensureStreakRecord();
   const currentDays = calculateStreakDays(streak.streak_start_date);

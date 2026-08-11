@@ -95,7 +95,15 @@ public class LocalNotificationPlugin extends Plugin {
             return;
         }
         am.cancel(buildAlarmIntent(ctx));
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, buildAlarmIntent(ctx));
+        PendingIntent pi = buildAlarmIntent(ctx);
+        // Exact alarm so it rings on time even in Doze. USE_EXACT_ALARM is
+        // auto-granted for this alarm-clock app on Android 12+; fall back to
+        // inexact only if a device somehow blocks exact alarms.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pi);
+        } else {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pi);
+        }
         JSObject ret = new JSObject();
         ret.put("scheduled", true);
         call.resolve(ret);
