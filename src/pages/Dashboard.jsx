@@ -33,6 +33,24 @@ export default function Dashboard() {
   const { settings: alarm, save: saveAlarm } = useAlarm();
   const [alarmTick, setAlarmTick] = useState(Date.now());
 
+  // Persisted marker of the last streak day a celebration was shown for, so a
+  // day rollover overnight still celebrates even if the app was closed.
+  const DAY_MARKER_KEY = "healen:celebrated-day";
+  const getCelebratedDay = () => {
+    try {
+      return parseInt(localStorage.getItem(DAY_MARKER_KEY) || "0", 10) || 0;
+    } catch {
+      return 0;
+    }
+  };
+  const setCelebratedDay = (d) => {
+    try {
+      localStorage.setItem(DAY_MARKER_KEY, String(d));
+    } catch {
+      /* ignore */
+    }
+  };
+
   const loadStreak = async () => {
     const s = await ensureStreakRecord();
     const current = calculateStreakDays(s.streak_start_date);
@@ -87,8 +105,18 @@ export default function Dashboard() {
         const res = await loadStreak();
         if (res.streak.onboarding_completed !== true) {
           navigate("/onboarding", { replace: true });
-        } else if (res.celebration) {
-          setCelebration(res.celebration);
+        } else {
+          const day = res.day;
+          const celebrated = getCelebratedDay();
+          const nextCelebration =
+            res.celebration ||
+            (day > celebrated && !sleeping
+              ? { type: "checkin", day: Math.max(day, 1) }
+              : null);
+          if (nextCelebration) {
+            setCelebration(nextCelebration);
+            setCelebratedDay(Math.max(day, 1));
+          }
         }
       } catch (e) {
         console.error(e);
@@ -109,6 +137,9 @@ export default function Dashboard() {
   useEffect(() => {
     if (!streak?.streak_start_date) return;
     lastNotifiedDayRef.current = calculateStreakDays(streak.streak_start_date);
+    if (calculateStreakDays(streak.streak_start_date) < getCelebratedDay()) {
+      setCelebratedDay(0);
+    }
   }, [streak?.streak_start_date]);
 
   useEffect(() => {
@@ -120,9 +151,10 @@ export default function Dashboard() {
         lastNotifiedDayRef.current = days;
         return;
       }
-      if (days > prev) {
+      if (days > prev || (days > getCelebratedDay() && days > prev)) {
         lastNotifiedDayRef.current = days;
         if (!sleeping) {
+          setCelebratedDay(days);
           loadStreak()
             .then((res) => {
               setCelebration(res.celebration || { type: "checkin", day: Math.max(days, 1) });
@@ -149,6 +181,7 @@ export default function Dashboard() {
     // Celebrate every successful check-in — the streak just got updated.
     // Milestones and goals take priority when they're also hit.
     const res = await loadStreak();
+    setCelebratedDay(Math.max(res.day, res.streak?.daily_goal_streak || 0, 1));
     if (res.celebration) {
       setCelebration(res.celebration);
     } else {

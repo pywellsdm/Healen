@@ -69,13 +69,32 @@ public class ReminderReceiver extends BroadcastReceiver {
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(ctx, channelId)
                 : new Notification.Builder(ctx);
-        Notification n = builder
+        Notification.Builder nBuilder = builder
                 .setContentTitle(title)
                 .setContentText(text)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(pi)
-                .setAutoCancel(true)
-                .build();
+                .setAutoCancel(true);
+        if (isAlarm) {
+            // Full-screen intent lets the alarm wake the screen over the lock
+            // screen on Android 10+; we also start the activity directly as a
+            // fallback for older versions and restricted devices.
+            Intent full = new Intent(ctx, AlarmActivity.class);
+            full.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            String session = intent.getStringExtra("session");
+            if (session != null) {
+                full.putExtra(AlarmActivity.EXTRA_SESSION, session);
+            }
+            PendingIntent fullPi = PendingIntent.getActivity(ctx, 1, full,
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            nBuilder.setFullScreenIntent(fullPi, true);
+            try {
+                ctx.startActivity(full);
+            } catch (Exception ignored) {
+                // Background-activity-start blocked; the full-screen notification handles it.
+            }
+        }
+        Notification n = nBuilder.build();
         nm.notify(id, n);
 
         if (isAlarm) return; // one-shot alarm — do not reschedule

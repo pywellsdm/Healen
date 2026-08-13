@@ -375,6 +375,31 @@ export default function AICoach() {
       ) : isWelcome ? (
         /* Welcome */
         <div className="flex-1 overflow-y-auto space-y-4 mb-3 -mx-5 px-5">
+          <div className="flex items-center justify-between glass rounded-2xl p-3 border border-white/10">
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-300">
+              <Brain className="w-4 h-4 text-indigo-400" />
+              AI memory
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-500">
+                {memoryEnabled ? "On" : "Off"}
+              </span>
+              <button
+                onClick={() => toggleMemory(!memoryEnabled)}
+                aria-label="Toggle AI memory"
+                className={cn(
+                  "w-10 h-6 rounded-full transition-colors relative",
+                  memoryEnabled ? "bg-indigo-500" : "bg-white/10"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform",
+                  memoryEnabled ? "translate-x-[18px]" : "translate-x-0.5"
+                )} />
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-col items-center text-center pt-6 pb-2">
             <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center mb-3">
               <Bot className="w-8 h-8 text-indigo-300" />
@@ -509,30 +534,6 @@ export default function AICoach() {
       {/* Input */}
       {!historyOpen && (
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Brain className="w-3.5 h-3.5 text-indigo-400" />
-              AI memory
-            </label>
-            <button
-              onClick={() => toggleMemory(!memoryEnabled)}
-              aria-label="Toggle AI memory"
-              className={cn(
-                "w-10 h-6 rounded-full transition-colors relative",
-                memoryEnabled ? "bg-indigo-500" : "bg-white/10"
-              )}
-            >
-              <div className={cn(
-                "absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform",
-                memoryEnabled ? "translate-x-[18px]" : "translate-x-0.5"
-              )} />
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-600 -mt-1 mb-2">
-            {memoryEnabled
-              ? "On: this chat remembers your past conversations and data."
-              : "Off: this chat starts fresh with no memory of other chats."}
-          </p>
           <div className="flex gap-2">
             <input
               value={input}

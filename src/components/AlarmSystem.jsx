@@ -138,18 +138,39 @@ export default function AlarmSystem({ children }) {
     setRinging(false);
   }, [stopAudio]);
 
-  // Native backup: schedule a one-shot system notification at the alarm target
-  // so the alarm still rings even if the app is in the background.
+  // Native backup: schedule a one-shot system alarm at the alarm target so it
+  // rings even if the app is in the background or the screen is locked.
   const sessionStart = streak?.sleep_session_start;
   useEffect(() => {
     if (!IS_NATIVE) return;
     if (settings?.enabled && sessionStart) {
-      LocalNotification.scheduleAlarmOnce(alarmTargetMs(sessionStart, settings.durationMin)).catch(() => {});
+      LocalNotification.scheduleAlarmOnce({
+        timestamp: alarmTargetMs(sessionStart, settings.durationMin),
+        session: sessionStart,
+      }).catch(() => {});
     } else {
       LocalNotification.cancelAlarm().catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [IS_NATIVE, settings?.enabled, settings?.durationMin, sessionStart]);
+
+  // If the native full-screen alarm was dismissed (app was backgrounded), mark
+  // that session as fired so the in-app alarm doesn't ring again when reopened.
+  useEffect(() => {
+    if (!IS_NATIVE) return;
+    LocalNotification.getAlarmDismissedSession()
+      .then((res) => {
+        const dismissed = res?.session;
+        const session = streakRef.current?.sleep_session_start;
+        if (dismissed && session && dismissed === session) {
+          return save({ lastFiredSession: session }).then(() =>
+            LocalNotification.clearAlarmDismissed()
+          );
+        }
+        return null;
+      })
+      .catch(() => {});
+  }, [IS_NATIVE, sessionStart, save]);
 
   // Watcher: every second, check whether the alarm should ring.
   useEffect(() => {

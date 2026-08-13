@@ -6,4 +6,6 @@ export const LocalNotification = registerPlugin("LocalNotification", {
   cancel: () => Promise.resolve(),
   scheduleAlarmOnce: () => Promise.resolve({ scheduled: false }),
   cancelAlarm: () => Promise.resolve(),
+  getAlarmDismissedSession: () => Promise.resolve({ session: null }),
+  clearAlarmDismissed: () => Promise.resolve(),
 });

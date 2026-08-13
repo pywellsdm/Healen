@@ -88,19 +88,21 @@ public class LocalNotificationPlugin extends Plugin {
     @PluginMethod
     public void scheduleAlarmOnce(PluginCall call) {
         long timestamp = call.getLong("timestamp", System.currentTimeMillis() + 60000);
+        String session = call.getString("session");
         Context ctx = getContext();
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (am == null) {
             call.reject("AlarmManager unavailable");
             return;
         }
-        am.cancel(buildAlarmIntent(ctx));
-        PendingIntent pi = buildAlarmIntent(ctx);
-        // Exact alarm so it rings on time even in Doze. USE_EXACT_ALARM is
-        // auto-granted for this alarm-clock app on Android 12+; fall back to
-        // inexact only if a device somehow blocks exact alarms.
+        am.cancel(buildAlarmIntent(ctx, null));
+        PendingIntent pi = buildAlarmIntent(ctx, session);
+        // setAlarmClock makes this a real alarm: it shows an alarm icon, is
+        // exact, survives Doze, and surfaces above the lock screen.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pi);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            am.setAlarmClock(new AlarmManager.AlarmClockInfo(timestamp, pi), pi);
         } else {
             am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pi);
         }
@@ -114,8 +116,28 @@ public class LocalNotificationPlugin extends Plugin {
         Context ctx = getContext();
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (am != null) {
-            am.cancel(buildAlarmIntent(ctx));
+            am.cancel(buildAlarmIntent(ctx, null));
         }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getAlarmDismissedSession(PluginCall call) {
+        String session = getContext()
+                .getSharedPreferences(AlarmActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(AlarmActivity.KEY_DISMISSED, null);
+        JSObject ret = new JSObject();
+        ret.put("session", session);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void clearAlarmDismissed(PluginCall call) {
+        getContext()
+                .getSharedPreferences(AlarmActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(AlarmActivity.KEY_DISMISSED)
+                .apply();
         call.resolve();
     }
 
@@ -125,9 +147,12 @@ public class LocalNotificationPlugin extends Plugin {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    private PendingIntent buildAlarmIntent(Context ctx) {
+    private PendingIntent buildAlarmIntent(Context ctx, String session) {
         Intent i = new Intent(ctx, ReminderReceiver.class);
         i.setAction("com.healen.app.ALARM");
+        if (session != null) {
+            i.putExtra("session", session);
+        }
         return PendingIntent.getBroadcast(ctx, ALARM_REQ_CODE, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
