@@ -1,497 +1,206 @@
-// Pure chess engine for the panic-mode chess bot.
-// Every function operates on a chess.js Game instance passed in by the caller.
+// Real Stockfish (v10, compiled to asm.js) running in a Web Worker.
+// The worker does all thinking off the main thread, so the UI never freezes.
+// Strength is controlled through UCI: UCI_Elo 1320–3190 for high levels,
+// Skill Level 0–5 for the weak end of the slider.
+
+import { Chess } from "chess.js";
+// `?url` copies the engine script verbatim (no bundling / strict-mode wrapper),
+// which is what the emscripten worker needs to run correctly.
+import stockfishWorkerUrl from "./engine/stockfish.js?url";
 
 export const PIECE_VALUES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
-export const MATE = 100000;
+export const MATE_CP = 100000;
 export const ELO_MIN = 300;
 export const ELO_MAX = 3000;
 
-// Piece-square tables, white's perspective (index 0 = a8)
-export const PST = {
-  p: [
-    0, 0, 0, 0, 0, 0, 0, 0,
-    50, 50, 50, 50, 50, 50, 50, 50,
-    10, 10, 20, 30, 30, 20, 10, 10,
-    5, 5, 10, 25, 25, 10, 5, 5,
-    0, 0, 0, 20, 20, 0, 0, 0,
-    5, -5, -10, 0, 0, -10, -5, 5,
-    5, 10, 10, -20, -20, 10, 10, 5,
-    0, 0, 0, 0, 0, 0, 0, 0,
-  ],
-  n: [
-    -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20, 0, 0, 0, 0, -20, -40,
-    -30, 0, 10, 15, 15, 10, 0, -30,
-    -30, 5, 15, 20, 20, 15, 5, -30,
-    -30, 0, 15, 20, 20, 15, 0, -30,
-    -30, 5, 10, 15, 15, 10, 5, -30,
-    -40, -20, 0, 5, 5, 0, -20, -40,
-    -50, -40, -30, -30, -30, -30, -40, -50,
-  ],
-  b: [
-    -20, -10, -10, -10, -10, -10, -10, -20,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -10, 0, 5, 10, 10, 5, 0, -10,
-    -10, 5, 5, 10, 10, 5, 5, -10,
-    -10, 0, 10, 10, 10, 10, 0, -10,
-    -10, 10, 10, 10, 10, 10, 10, -10,
-    -10, 5, 0, 0, 0, 0, 5, -10,
-    -20, -10, -10, -10, -10, -10, -10, -20,
-  ],
-  r: [
-    0, 0, 0, 0, 0, 0, 0, 0,
-    5, 10, 10, 10, 10, 10, 10, 5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    0, 0, 0, 5, 5, 0, 0, 0,
-  ],
-  q: [
-    -20, -10, -10, -5, -5, -10, -10, -20,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -10, 0, 5, 5, 5, 5, 0, -10,
-    -5, 0, 5, 5, 5, 5, 0, -5,
-    0, 0, 5, 5, 5, 5, 0, -5,
-    -10, 5, 5, 5, 5, 5, 0, -10,
-    -10, 0, 5, 0, 0, 0, 0, -10,
-    -20, -10, -10, -5, -5, -10, -10, -20,
-  ],
-  k: [
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -20, -30, -30, -40, -40, -30, -30, -20,
-    -10, -20, -20, -20, -20, -20, -20, -10,
-    20, 20, 0, 0, 0, 0, 20, 20,
-    20, 30, 10, 0, 0, 10, 30, 20,
-  ],
-};
+// Stockfish's UCI_Elo option is only calibrated 1320–3190. Below that we use
+// Skill Level, which plays progressively weaker and blunders on purpose.
+const ELO_LIMIT_FLOOR = 1320;
+const ELO_LIMIT_CEIL = 3190;
 
-const KING_RING = [
-  [-1, -1], [-1, 0], [-1, 1],
-  [0, -1], [0, 1],
-  [1, -1], [1, 0], [1, 1],
-];
+let worker = null;
+let workerError = null;
+let nextId = 1;
+let currentId = null;
+const pending = new Map();
+let lastScore = { cp: null, mate: null };
+let lastElo = undefined;
 
-// Pseudo-legal attack map for `color` (blocking-aware for sliding pieces)
-function attackMap(b, color) {
-  const atk = new Array(64).fill(false);
-  const pdir = color === "w" ? -1 : 1;
-
-  for (let r = 0; r < 8; r++) {
-    for (let f = 0; f < 8; f++) {
-      const p = b[r][f];
-      if (!p || p.color !== color) continue;
-      const t = p.type;
-      if (t === "p") {
-        const nr = r + pdir;
-        for (const df of [-1, 1]) {
-          const nf = f + df;
-          if (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) atk[nr * 8 + nf] = true;
-        }
-      } else if (t === "n") {
-        for (const [dr, df] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
-          const nr = r + dr, nf = f + df;
-          if (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) atk[nr * 8 + nf] = true;
-        }
-      } else if (t === "k") {
-        for (const [dr, df] of KING_RING) {
-          const nr = r + dr, nf = f + df;
-          if (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) atk[nr * 8 + nf] = true;
-        }
-      } else {
-        const dirs =
-          t === "b"
-            ? [[-1, -1], [-1, 1], [1, -1], [1, 1]]
-            : t === "r"
-              ? [[-1, 0], [1, 0], [0, -1], [0, 1]]
-              : [[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]];
-        for (const [dr, df] of dirs) {
-          let nr = r + dr, nf = f + df;
-          while (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) {
-            atk[nr * 8 + nf] = true;
-            if (b[nr][nf]) break;
-            nr += dr;
-            nf += df;
-          }
-        }
-      }
-    }
-  }
-  return atk;
+function parseUci(uci) {
+  const from = uci.slice(0, 2);
+  const to = uci.slice(2, 4);
+  const promotion = uci.length > 4 ? uci[4] : undefined;
+  return { from, to, promotion };
 }
 
-function ringSquares(sq) {
-  const r = sq >> 3;
-  const f = sq & 7;
-  const out = [];
-  for (const [dr, df] of KING_RING) {
-    const nr = r + dr, nf = f + df;
-    if (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) out.push(nr * 8 + nf);
+function scoreCp(score) {
+  if (score == null) return null;
+  if (score.cp != null) return score.cp;
+  if (score.mate != null) {
+    const sign = score.mate > 0 ? 1 : -1;
+    return sign * (MATE_CP - Math.abs(score.mate) * 1000);
   }
-  return out;
+  return null;
 }
 
-// No enemy pawn on the same or adjacent files ahead of this pawn
-function isPassed(b, r, f, color) {
-  const step = color === "w" ? -1 : 1;
-  for (let rr = r + step; rr >= 0 && rr < 8; rr += step) {
-    for (let ff = f - 1; ff <= f + 1; ff++) {
-      if (ff < 0 || ff > 7) continue;
-      const p = b[rr][ff];
-      if (p && p.type === "p" && p.color !== color) return false;
-    }
-  }
-  return true;
+function parseInfo(line) {
+  const cp = /score cp (-?\d+)/.exec(line);
+  const mate = /score mate (-?\d+)/.exec(line);
+  if (cp) lastScore = { cp: Number(cp[1]), mate: null };
+  else if (mate) lastScore = { cp: null, mate: Number(mate[1]) };
 }
 
-// evaluate() returns a score from the side-to-move's perspective (negamax convention)
-export function evaluate(game) {
-  const b = game.board();
-  const stm = game.turn();
-
-  const wAtk = attackMap(b, "w");
-  const bAtk = attackMap(b, "b");
-
-  let score = 0;
-  let wk = -1;
-  let bk = -1;
-  let wBishops = 0;
-  let bBishops = 0;
-  let queens = 0;
-
-  for (let r = 0; r < 8; r++) {
-    for (let f = 0; f < 8; f++) {
-      const p = b[r][f];
-      if (!p) continue;
-      const idx = r * 8 + f;
-      if (p.type === "k") {
-        if (p.color === "w") wk = idx;
-        else bk = idx;
-        continue;
-      }
-
-      let v = PIECE_VALUES[p.type] + PST[p.type][p.color === "w" ? idx : 63 - idx];
-      if (p.type === "b") {
-        if (p.color === "w") wBishops++;
-        else bBishops++;
-      }
-      if (p.type === "q") queens++;
-      if (p.type === "p" && isPassed(b, r, f, p.color)) {
-        const progress = p.color === "w" ? 7 - r : r;
-        v += progress * progress * 6;
-      }
-      if (p.type === "r") {
-        let anyPawn = false;
-        let enemyPawn = false;
-        for (let rr = 0; rr < 8; rr++) {
-          const pp = b[rr][f];
-          if (pp && pp.type === "p") {
-            anyPawn = true;
-            if (pp.color !== p.color) enemyPawn = true;
-          }
-        }
-        if (!anyPawn) v += 20;
-        else if (!enemyPawn) v += 10;
-      }
-      score += p.color === "w" ? v : -v;
-    }
+function onLine(line) {
+  if (typeof line !== "string") return;
+  if (line.startsWith("info")) {
+    parseInfo(line);
+    return;
   }
-
-  if (wBishops >= 2) score += 25;
-  if (bBishops >= 2) score -= 25;
-
-  // King safety — threats landing on the king's ring
-  if (wk >= 0) {
-    let attacks = 0;
-    for (const sq of ringSquares(wk)) if (bAtk[sq]) attacks++;
-    if (attacks > 0) score -= attacks * 12;
+  if (!line.startsWith("bestmove")) return;
+  const parts = line.split(/\s+/);
+  const uci = parts[1];
+  const id = currentId;
+  currentId = null;
+  const cb = pending.get(id);
+  pending.delete(id);
+  if (cb) {
+    cb({
+      move: uci === "(none)" ? null : uci,
+      score: lastScore,
+    });
   }
-  if (bk >= 0) {
-    let attacks = 0;
-    for (const sq of ringSquares(bk)) if (wAtk[sq]) attacks++;
-    if (attacks > 0) score += attacks * 12;
-  }
-
-  // Mobility / piece activity
-  let wMob = 0;
-  let bMob = 0;
-  for (let i = 0; i < 64; i++) {
-    if (wAtk[i]) wMob++;
-    if (bAtk[i]) bMob++;
-  }
-  score += (wMob - bMob) * 2;
-
-  // Endgame — centralize the kings once queens are gone
-  if (queens <= 1 && wk >= 0 && bk >= 0) {
-    score += PST.k[wk] - PST.k[63 - bk];
-  }
-
-  return stm === "w" ? score + 8 : -score + 8;
+  lastScore = { cp: null, mate: null };
 }
 
-// MVV-LVA ordering: winning captures and promotions first
-function orderValue(m) {
-  let s = 0;
-  if (m.promotion) s += PIECE_VALUES.q;
-  if (m.captured) s += 10 * PIECE_VALUES[m.captured] - PIECE_VALUES[m.piece];
-  return s;
+export function initEngine() {
+  if (worker) return worker;
+  worker = new Worker(stockfishWorkerUrl);
+  worker.onmessage = (e) => onLine(e.data);
+  worker.onerror = (e) => {
+    workerError = e.message || "stockfish worker failed";
+  };
+  worker.postMessage("uci");
+  return worker;
 }
 
-const TT_EXACT = 0;
-const TT_LOWER = 1;
-const TT_UPPER = 2;
-
-let tt = new Map();
-let killers = [];
-let deadline = 0;
-let nodes = 0;
-let stopped = false;
-
-function positionKey(game) {
-  return game.fen().split(" ").slice(0, 4).join(" ");
-}
-
-// Quiescence search — captures plus full evasions when in check.
-// qsPly bounds the extra depth so check-crazy lines can't eat the whole time budget.
-function qsearch(game, alpha, beta, ply, qsPly = 0) {
-  if (qsPly >= 10) return evaluate(game);
-  nodes++;
-  if ((nodes & 255) === 0 && performance.now() > deadline) stopped = true;
-  if (stopped) return 0;
-
-  const inCheck = game.inCheck();
-  if (!inCheck) {
-    const stand = evaluate(game);
-    if (stand >= beta) return beta;
-    if (stand > alpha) alpha = stand;
-  }
-
-  let caps;
-  if (inCheck) {
-    caps = game.moves({ verbose: true });
-  } else {
-    caps = [];
-    for (const m of game.moves({ verbose: true })) {
-      if (m.captured || m.promotion) caps.push(m);
-    }
-  }
-  if (caps.length === 0) return inCheck ? -MATE + ply : alpha;
-  caps.sort((a, b) => orderValue(b) - orderValue(a));
-
-  for (const m of caps) {
-    game.move(m);
-    const s = -qsearch(game, -beta, -alpha, ply + 1, qsPly + 1);
-    game.undo();
-    if (s >= beta) return beta;
-    if (s > alpha) alpha = s;
-  }
-  return alpha;
-}
-
-function negamax(game, depth, alpha, beta, ply) {
-  nodes++;
-  if ((nodes & 255) === 0 && performance.now() > deadline) stopped = true;
-  if (stopped) return 0;
-
-  const key = positionKey(game);
-  const entry = tt.get(key);
-  if (entry && entry.depth >= depth) {
-    if (entry.flag === TT_EXACT) return entry.score;
-    if (entry.flag === TT_LOWER && entry.score >= beta) return entry.score;
-    if (entry.flag === TT_UPPER && entry.score <= alpha) return entry.score;
-  }
-
-  const moves = game.moves({ verbose: true });
-  if (moves.length === 0) {
-    return game.inCheck() ? -MATE + ply : 0;
-  }
-  if (game.isThreefoldRepetition()) return 0;
-  if (depth <= 0) return qsearch(game, alpha, beta, ply);
-
-  const k1 = killers[ply];
-  const k2 = killers[ply + 1];
-  moves.forEach((m) => {
-    m.order = orderValue(m);
-    if (m.san === k1) m.order += 400;
-    else if (m.san === k2) m.order += 250;
+// One UCI search at a time — commands are serialized so a `bestmove` always
+// resolves the search that owns the in-flight `go`.
+function queueSearch({ fen, elo, movetime, full }) {
+  const id = nextId++;
+  return new Promise((resolve) => {
+    pending.set(id, resolve);
+    const run = () => {
+      currentId = id;
+      lastScore = { cp: null, mate: null };
+      worker.postMessage("position fen " + fen);
+      applyStrength(full ? null : elo);
+      worker.postMessage("go movetime " + movetime);
+    };
+    const prev = pendingSearch;
+    pendingSearch = prev.then(run);
   });
-  moves.sort((a, b) => b.order - a.order);
-  if (moves.length > 36) moves.length = 36;
-
-  const origAlpha = alpha;
-  let best = -Infinity;
-  let bestMove = null;
-  for (const m of moves) {
-    game.move(m);
-    const s = -negamax(game, depth - 1, -beta, -alpha, ply + 1);
-    game.undo();
-    if (stopped) return 0;
-    if (s > best) {
-      best = s;
-      bestMove = m;
-    }
-    if (s > alpha) alpha = s;
-    if (alpha >= beta) {
-      if (!m.captured && !m.promotion && ply < 30) killers[ply] = m.san;
-      break;
-    }
-  }
-
-  let flag = TT_EXACT;
-  if (best <= origAlpha) flag = TT_UPPER;
-  else if (best >= beta) flag = TT_LOWER;
-  tt.set(key, { depth, score: best, flag });
-  return best;
 }
 
-// Root search: iterative deepening within a time budget.
-// opts: { maxDepth, timeMs, window (centipawns of noise), blunderRate (0..1) }
-// Returns { move, score } where score is from the side-to-move's perspective.
-export function searchRoot(game, opts) {
-  const legal = game.moves({ verbose: true });
-  if (legal.length === 0) return null;
+let pendingSearch = Promise.resolve();
 
-  if (opts.blunderRate > 0 && Math.random() < opts.blunderRate) {
-    return { move: legal[Math.floor(Math.random() * legal.length)], score: 0 };
+// Interrupt whatever Stockfish is thinking about right now. Queued searches
+// still run afterwards (callers drop stale results themselves).
+export function cancelSearch() {
+  if (worker) worker.postMessage("stop");
+}
+
+function applyStrength(elo) {
+  if (elo === lastElo) return;
+  lastElo = elo;
+  if (elo == null || elo >= ELO_LIMIT_CEIL) {
+    // Full power (used for grading the player's moves)
+    worker.postMessage("setoption name UCI_LimitStrength value false");
+    worker.postMessage("setoption name Skill Level value 20");
+    return;
   }
-
-  deadline = performance.now() + opts.timeMs;
-  nodes = 0;
-  stopped = false;
-  tt = new Map();
-  killers = new Array(32).fill("");
-
-  let bestMove = legal[0];
-  let bestScore = -Infinity;
-  let rootScores = new Map();
-
-  for (let d = 1; d <= opts.maxDepth; d++) {
-    if (rootScores.size > 0) {
-      legal.sort(
-        (a, b) =>
-          (rootScores.get(b.san) ?? -Infinity) - (rootScores.get(a.san) ?? -Infinity)
-      );
-    }
-    let iterBest = -Infinity;
-    let iterBestMove = null;
-    const iterScores = [];
-    let completed = true;
-
-    for (const m of legal) {
-      if (performance.now() > deadline) {
-        completed = false;
-        break;
-      }
-      game.move(m);
-      const s = -negamax(game, d - 1, -Infinity, Infinity, 1);
-      game.undo();
-      if (stopped) {
-        completed = false;
-        break;
-      }
-      iterScores.push({ move: m, score: s });
-      if (s > iterBest) {
-        iterBest = s;
-        iterBestMove = m;
-      }
-    }
-
-    if (!completed) break;
-    bestMove = iterBestMove;
-    bestScore = iterBest;
-    rootScores = new Map(iterScores.map((r) => [r.move.san, r.score]));
-
-    if (bestScore >= MATE - 1000) break;
-  }
-
-  if (opts.window > 0 && rootScores.size > 0) {
-    const best = Math.max(...rootScores.values());
-    const candidates = legal.filter(
-      (m) => best - (rootScores.get(m.san) ?? Infinity) <= opts.window
+  if (elo >= ELO_LIMIT_FLOOR) {
+    worker.postMessage("setoption name UCI_LimitStrength value true");
+    worker.postMessage(
+      `setoption name UCI_Elo value ${Math.round(Math.min(ELO_LIMIT_CEIL, elo))}`
     );
-    if (candidates.length > 0) {
-      return {
-        move: candidates[Math.floor(Math.random() * candidates.length)],
-        score: best,
-      };
-    }
+    return;
   }
-  // Safety net: if the time budget vanished before any iteration finished,
-  // fall back to a quick 1-ply capture check rather than returning garbage.
-  if (bestScore === -Infinity) {
-    let greedy = legal[0];
-    let bestGreedy = -Infinity;
-    for (const m of legal) {
-      game.move(m);
-      let s = -qsearch(game, -Infinity, Infinity, 1);
-      game.undo();
-      if (s > bestGreedy) {
-        bestGreedy = s;
-        greedy = m;
-      }
-    }
-    return { move: greedy, score: bestGreedy };
-  }
-  return { move: bestMove, score: bestScore };
+  worker.postMessage("setoption name UCI_LimitStrength value false");
+  const skill = Math.max(
+    0,
+    Math.min(5, Math.round(((elo - ELO_MIN) / (ELO_LIMIT_FLOOR - ELO_MIN)) * 5))
+  );
+  worker.postMessage(`setoption name Skill Level value ${skill}`);
 }
 
-export function searchBest(game, opts) {
-  return searchRoot(game, { ...opts, window: 0, blunderRate: 0 });
+async function engineSearch(opts) {
+  if (workerError) return null;
+  initEngine();
+  return queueSearch(opts);
 }
 
-// Map a 300–3000 Elo rating to search settings.
-// High ratings think longer, take the best move and never blunder;
-// low ratings think barely at all, play inside a wide noise window and blunder often.
+// Map the 300–3000 Elo slider to { elo, movetime }.
 export function paramsForElo(elo) {
   const t = Math.max(0, Math.min(1, (elo - ELO_MIN) / (ELO_MAX - ELO_MIN)));
   return {
-    maxDepth: 6,
-    timeMs: 120 + Math.round(2080 * Math.pow(t, 1.25)),
-    window: Math.round((2.0 - 2.0 * t) * 100),
-    blunderRate: Math.round(250 * Math.pow(1 - t, 1.6)) / 1000,
+    elo,
+    movetime: 120 + Math.round(2080 * Math.pow(t, 1.25)),
   };
 }
 
-const GRADE_OPTS = { maxDepth: 4, timeMs: 260, window: 0, blunderRate: 0 };
+// Pick the AI's move. Returns { move: { from, to, promotion }, score } or null.
+export async function searchRoot(game, opts = {}) {
+  const legal = game.moves({ verbose: true });
+  if (legal.length === 0) return null;
+  const res = await engineSearch({
+    fen: game.fen(),
+    elo: opts.elo,
+    movetime: opts.movetime || 1000,
+  });
+  if (!res || !res.move) return null;
+  return { move: parseUci(res.move), score: scoreCp(res.score) };
+}
 
-// Grade a move the side-to-move just played: brilliant → blunder with a blurb
-export function classifyMove(game, move, mover) {
-  if (!move) {
-    return { label: "Best", tone: "best", desc: "The strongest move available in this position." };
+// Grade a move the player just played: brilliant → blunder with a blurb.
+// `fenBefore` is the position before the move (side to move = mover).
+export async function classifyMove(fenBefore, moveObj, mover) {
+  let g;
+  try {
+    g = new Chess(fenBefore);
+  } catch (e) {
+    return null;
   }
-  game.move(move);
-  if (game.isCheckmate()) {
-    const mated = game.turn();
-    game.undo();
+  let res;
+  try {
+    res = g.move(moveObj);
+  } catch (e) {
+    return null;
+  }
+  if (!res) return null;
+
+  if (g.isCheckmate()) {
+    const mated = g.turn();
     return mated === mover
       ? { label: "Blunder", tone: "blunder", desc: "The move allowed a forced checkmate — the game is lost." }
       : { label: "Brilliant", tone: "brilliant", desc: "Checkmate! A flawless finish to the game." };
   }
-  if (game.isStalemate()) {
-    game.undo();
+  if (g.isStalemate()) {
     return { label: "Blunder", tone: "blunder", desc: "The move stalemated the opponent and threw away the win." };
   }
 
-  // Best outcome the opponent can reach after the played move (from mover's perspective)
-  const oppBest = searchBest(game, GRADE_OPTS);
-  const after = oppBest ? -oppBest.score : -evaluate(game);
-  game.undo();
+  const afterRes = await engineSearch({ fen: g.fen(), movetime: 400, full: true });
+  const after = afterRes ? -scoreCp(afterRes.score) : null;
+  const beforeRes = await engineSearch({ fen: fenBefore, movetime: 400, full: true });
+  const before = beforeRes ? scoreCp(beforeRes.score) : null;
+  if (before == null || after == null) return null;
 
-  // Best outcome available before the move was played
-  const best = searchBest(game, GRADE_OPTS);
-  const bestScore = best ? best.score : after;
-
-  const cpl = Math.max(0, Math.round(bestScore - after));
-  const isCapture = !!move.captured || move.flags.includes("e");
+  const cpl = Math.max(0, Math.round(before - after));
+  const isCapture = !!res.captured || res.flags.includes("e");
   const sacrificed =
-    isCapture && PIECE_VALUES[move.piece] < PIECE_VALUES[move.captured || "p"];
+    isCapture && PIECE_VALUES[res.piece] < PIECE_VALUES[res.captured || "p"];
 
   if (cpl <= 5) {
-    if (move.promotion)
+    if (res.promotion)
       return { label: "Brilliant", tone: "brilliant", desc: "A promotion that wins — a perfect execution." };
     if (sacrificed)
       return { label: "Brilliant", tone: "brilliant", desc: "Gives up material yet is still the very best move — a stunning exchange." };

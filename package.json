@@ -1,7 +1,7 @@
 {
   "name": "healen",
   "private": true,
-  "version": "3.6.0",
+  "version": "3.6.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -124,6 +124,8 @@
     "set-function-length": "1.2.2",
     "set-function-name": "2.0.2",
     "typed-array-buffer": "1.0.3",
-    "safe-regex-test": "1.1.0"
+    "safe-regex-test": "1.1.0",
+    "has-proto": "1.2.0",
+    "dunder-proto": "1.0.1"
   }
 }

@@ -8,6 +8,8 @@ import {
   classifyMove,
   searchRoot,
   paramsForElo,
+  initEngine,
+  cancelSearch,
   PIECE_VALUES,
   ELO_MIN,
   ELO_MAX,
@@ -249,6 +251,8 @@ export default function ChessGame({ onClose }) {
   }, [playerColor, showHints]);
 
   const capturedStackRef = useRef([]);
+  const aiSeqRef = useRef(0);
+  const hintSeqRef = useRef(0);
 
   const startGame = useCallback(() => {
     const color =
@@ -262,6 +266,9 @@ export default function ChessGame({ onClose }) {
     setCaptured({ w: [], b: [] });
     setLastEval(null);
     capturedStackRef.current = [];
+    aiSeqRef.current++;
+    hintSeqRef.current++;
+    cancelSearch();
     setStatus("playing");
     setPhase("playing");
     chessSounds.start();
@@ -275,6 +282,9 @@ export default function ChessGame({ onClose }) {
     setCaptured({ w: [], b: [] });
     setLastEval(null);
     capturedStackRef.current = [];
+    aiSeqRef.current++;
+    hintSeqRef.current++;
+    cancelSearch();
     setStatus("playing");
     setPhase("setup");
   };
@@ -282,11 +292,7 @@ export default function ChessGame({ onClose }) {
   const commitMove = useCallback((move) => {
     const g = gameRef.current;
     const mover = g.turn();
-
-    let evalInfo = null;
-    if (showHintsRef.current && mover === playerColorRef.current) {
-      evalInfo = classifyMove(g, move, mover);
-    }
+    const fenBefore = g.fen();
 
     const res = g.move(move);
     if (!res) return false;
@@ -294,12 +300,6 @@ export default function ChessGame({ onClose }) {
     setPieces((prev) => applyMoveToPieces(prev, res));
     setLastMove({ from: res.from, to: res.to });
     setSelected(null);
-    // Only update the hint pill for the player's own moves; keep it visible
-    // (and readable) while the AI replies.
-    if (evalInfo) setLastEval(evalInfo);
-    if (evalInfo && (evalInfo.tone === "brilliant" || evalInfo.tone === "great")) {
-      chessSounds.praise();
-    }
 
     if (res.captured) {
       const capSquare = res.flags.includes("e") ? res.to[0] + res.from[1] : res.to;
@@ -316,6 +316,21 @@ export default function ChessGame({ onClose }) {
     else chessSounds.move();
 
     if (g.inCheck()) setTimeout(() => chessSounds.check(), 140);
+
+    // Grade the player's move in the background — Stockfish thinks on a
+    // worker thread so the UI never stutters while it analyses.
+    if (showHintsRef.current && mover === playerColorRef.current) {
+      const seq = ++hintSeqRef.current;
+      classifyMove(
+        fenBefore,
+        { from: res.from, to: res.to, promotion: res.promotion },
+        mover
+      ).then((info) => {
+        if (seq !== hintSeqRef.current || gameRef.current !== g || !info) return;
+        setLastEval(info);
+        if (info.tone === "brilliant" || info.tone === "great") chessSounds.praise();
+      });
+    }
 
     setVersion((v) => v + 1);
 
@@ -373,7 +388,16 @@ export default function ChessGame({ onClose }) {
     setVersion((v) => v + 1);
   }, [phase, status]);
 
-  // AI's turn
+  // Warm up the Stockfish worker in the background so the first move is instant.
+  useEffect(() => {
+    try {
+      initEngine();
+    } catch (e) {
+      console.error("Failed to start chess engine", e);
+    }
+  }, []);
+
+  // AI's turn — runs in the Stockfish worker so the UI stays buttery smooth.
   useEffect(() => {
     if (phase !== "playing" || status !== "playing") return;
     if (game.isGameOver()) {
@@ -383,22 +407,27 @@ export default function ChessGame({ onClose }) {
     }
     if (game.turn() === playerColor) return;
 
+    const myGame = gameRef.current;
+    const fen = myGame.fen();
+    const seq = ++aiSeqRef.current;
     setThinking(true);
-    const t = setTimeout(() => {
-      try {
-        const best = searchRoot(game, paramsForElo(botElo));
-        if (best) {
-          commitMove(best.move);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
+
+    searchRoot(myGame, paramsForElo(botElo))
+      .then((best) => {
+        if (seq !== aiSeqRef.current) return;
+        if (gameRef.current !== myGame) return;
+        if (myGame.fen() !== fen) return;
         setThinking(false);
-      }
-    }, 150);
+        if (best) commitMove(best.move);
+      })
+      .catch((e) => {
+        console.error(e);
+        setThinking(false);
+      });
+
     return () => {
-      clearTimeout(t);
       setThinking(false);
+      cancelSearch();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version, status, phase, playerColor, botElo]);

@@ -23,6 +23,11 @@ declare module "*.svg" {
   export default src;
 }
 
+declare module "*?url" {
+  const src: string;
+  export default src;
+}
+
 interface Window {
   Capacitor?: { isNativePlatform?: () => boolean };
 }
