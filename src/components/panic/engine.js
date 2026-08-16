@@ -1,7 +1,8 @@
 // Real Stockfish (v10, compiled to asm.js) running in a Web Worker.
 // The worker does all thinking off the main thread, so the UI never freezes.
-// Strength is controlled through UCI: UCI_Elo 1320–3190 for high levels,
-// Skill Level 0–5 for the weak end of the slider.
+// Strength is controlled through UCI's Skill Level 0–20: this engine build
+// doesn't ship UCI_Elo / UCI_LimitStrength, so the 300–3000 Elo slider is
+// mapped onto the full skill range (300 → 0, 3000 → 20 = full power).
 
 import { Chess } from "chess.js";
 // `?url` copies the engine script verbatim (no bundling / strict-mode wrapper),
@@ -12,11 +13,6 @@ export const PIECE_VALUES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 }
 export const MATE_CP = 100000;
 export const ELO_MIN = 300;
 export const ELO_MAX = 3000;
-
-// Stockfish's UCI_Elo option is only calibrated 1320–3190. Below that we use
-// Skill Level, which plays progressively weaker and blunders on purpose.
-const ELO_LIMIT_FLOOR = 1320;
-const ELO_LIMIT_CEIL = 3190;
 
 let worker = null;
 let workerError = null;
@@ -84,21 +80,34 @@ export function initEngine() {
 }
 
 // One UCI search at a time — commands are serialized so a `bestmove` always
-// resolves the search that owns the in-flight `go`.
+// resolves the search that owns the in-flight `go`. Each search in the chain
+// waits for the PREVIOUS search's `bestmove` to arrive, never for a stale
+// search to be interrupted, or the engine would silently drop the `bestmove`
+// of the search it aborted and hints would hang forever.
 function queueSearch({ fen, elo, movetime, full }) {
   const id = nextId++;
-  return new Promise((resolve) => {
-    pending.set(id, resolve);
-    const run = () => {
-      currentId = id;
-      lastScore = { cp: null, mate: null };
+  let resolveSearch;
+  const search = new Promise((resolve) => {
+    resolveSearch = resolve;
+  });
+  pending.set(id, resolveSearch);
+
+  const run = () => {
+    currentId = id;
+    lastScore = { cp: null, mate: null };
+    try {
       worker.postMessage("position fen " + fen);
       applyStrength(full ? null : elo);
       worker.postMessage("go movetime " + movetime);
-    };
-    const prev = pendingSearch;
-    pendingSearch = prev.then(run);
-  });
+    } catch (err) {
+      resolveSearch();
+    }
+    return search;
+  };
+
+  const prev = pendingSearch;
+  pendingSearch = prev.then(run).catch(() => {});
+  return search;
 }
 
 let pendingSearch = Promise.resolve();
@@ -109,27 +118,19 @@ export function cancelSearch() {
   if (worker) worker.postMessage("stop");
 }
 
+// Map the 300–3000 Elo slider onto Stockfish's Skill Level 0–20 (0 = weakest,
+// 20 = full power). 3000 Elo is full strength — used for grading the player's
+// moves too.
+function skillForElo(elo) {
+  if (elo == null || elo >= ELO_MAX) return 20;
+  const t = Math.max(0, Math.min(1, (elo - ELO_MIN) / (ELO_MAX - ELO_MIN)));
+  return Math.round(20 * t);
+}
+
 function applyStrength(elo) {
-  if (elo === lastElo) return;
-  lastElo = elo;
-  if (elo == null || elo >= ELO_LIMIT_CEIL) {
-    // Full power (used for grading the player's moves)
-    worker.postMessage("setoption name UCI_LimitStrength value false");
-    worker.postMessage("setoption name Skill Level value 20");
-    return;
-  }
-  if (elo >= ELO_LIMIT_FLOOR) {
-    worker.postMessage("setoption name UCI_LimitStrength value true");
-    worker.postMessage(
-      `setoption name UCI_Elo value ${Math.round(Math.min(ELO_LIMIT_CEIL, elo))}`
-    );
-    return;
-  }
-  worker.postMessage("setoption name UCI_LimitStrength value false");
-  const skill = Math.max(
-    0,
-    Math.min(5, Math.round(((elo - ELO_MIN) / (ELO_LIMIT_FLOOR - ELO_MIN)) * 5))
-  );
+  const skill = skillForElo(elo);
+  if (skill === lastElo) return;
+  lastElo = skill;
   worker.postMessage(`setoption name Skill Level value ${skill}`);
 }
 

@@ -48,7 +48,7 @@ async function fetchLatestRelease() {
   try {
     const res = await fetch(
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-      { headers: { Accept: "application/vnd.github+json" } }
+      { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" }
     );
     if (res.ok) return await res.json();
   } catch (e) {
