@@ -98,10 +98,10 @@ export default function Statistics() {
     };
   });
 
-  // Urge level over time
-  const urgeData = [...Array(14)].map((_, i) => {
+  // Urge level over time — last 7 days only
+  const urgeData = [...Array(7)].map((_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() - (13 - i));
+    d.setDate(d.getDate() - (6 - i));
     const dateStr = d.toISOString().split("T")[0];
     const dayCheckins = checkIns.filter((c) => c.checkin_date === dateStr);
     const avg = dayCheckins.length > 0
@@ -128,7 +128,7 @@ export default function Statistics() {
   const sleepSuccessRate = sleepEntries.length > 0
     ? Math.round((sleepSuccess.length / sleepEntries.length) * 100)
     : 100;
-  const sleepChart = sleepEntries.slice(-14).map((s) => ({
+  const sleepChart = sleepEntries.slice(-7).map((s) => ({
     day: new Date(s.start_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     hours: Math.round(((s.duration_min || 0) / 60) * 10) / 10,
     color: SLEEP_STATUS_COLORS[s.status] || "#818cf8",
@@ -331,7 +331,7 @@ export default function Statistics() {
 
           {/* Urge level chart */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
-            <p className="text-sm font-semibold text-white mb-1">Urge Intensity — Last 14 Days</p>
+            <p className="text-sm font-semibold text-white mb-1">Urge Intensity — Last 7 Days</p>
             <p className="text-xs text-slate-500 mb-4">Tracking your triggers over time</p>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={urgeData}>

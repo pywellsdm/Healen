@@ -251,3 +251,56 @@ input[type="range"]::-webkit-slider-thumb {
 .bg-indigo-900\/30 { background-color: hsl(var(--accent-hue) 55% 24% / 0.3); }
 .bg-purple-900\/30 { background-color: hsl(calc(var(--accent-hue) + 40) 55% 24% / 0.3); }
 .border-purple-400\/40 { border-color: hsl(calc(var(--accent-hue) + 40) 75% 65% / 0.4); }
+
+/* Chess piece landing pop */
+@keyframes chess-land {
+  0% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.animate-chess-land {
+  animation: chess-land 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Move quality hint pill */
+@keyframes hint-pop {
+  0% { transform: scale(0.82) translateY(5px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.animate-hint-pop {
+  animation: hint-pop 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Elo strength slider */
+input[type="range"].elo-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, #6366f1, #a855f7);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"].elo-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+input[type="range"].elo-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+input[type="range"].elo-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5);
+  cursor: pointer;
+}

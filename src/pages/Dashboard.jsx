@@ -178,17 +178,11 @@ export default function Dashboard() {
   };
 
   const handleCheckInComplete = async () => {
-    // Celebrate every successful check-in — the streak just got updated.
-    // Milestones and goals take priority when they're also hit.
+    // Refresh the streak after a check-in. The celebration only fires on a
+    // streak day rollover (or a milestone/goal), not on every check-in.
     const res = await loadStreak();
-    setCelebratedDay(Math.max(res.day, res.streak?.daily_goal_streak || 0, 1));
     if (res.celebration) {
       setCelebration(res.celebration);
-    } else {
-      setCelebration({
-        type: "checkin",
-        day: Math.max(res.day, res.streak?.daily_goal_streak || 0, 1),
-      });
     }
   };
 

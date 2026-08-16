@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Wind, Gamepad2, BookOpen, Zap, Brain, Moon, Music, Sunset } from "lucide-react";
 import BreathingExercise from "@/components/panic/BreathingExercise";
-import MiniGame from "@/components/panic/MiniGame";
+import ChessGame from "@/components/panic/ChessGame";
 import MotivationCard from "@/components/streak/MotivationCard";
 import { db } from "@/lib/store";
 import { ensureStreakRecord } from "@/lib/streakUtils";
@@ -12,7 +12,7 @@ import { useEffect } from "react";
 export default function PanicMode() {
   const { mode } = useMode();
   const sleeping = mode === "sleeping";
-  const [view, setView] = useState("menu"); // menu | breathing | game | coldwater | exercise | bodyscan | sound | winddown
+  const [view, setView] = useState("menu"); // menu | breathing | chess | coldwater | exercise | bodyscan | sound | winddown
   const [streak, setStreak] = useState(null);
 
   useEffect(() => {
@@ -106,14 +106,14 @@ export default function PanicMode() {
         },
         {
           icon: Gamepad2,
-          title: "Mini Game",
-          desc: "Extinguish urges — redirect your focus",
+          title: "Chess",
+          desc: "Beat the AI — refocus your mind",
           color: "from-rose-500/20 to-red-600/10",
           border: "border-rose-400/20",
           iconColor: "text-rose-400",
           action: () => {
             logPanicUse();
-            setView("game");
+            setView("chess");
           },
         },
         {
@@ -146,8 +146,8 @@ export default function PanicMode() {
     return <BreathingExercise onClose={() => setView("menu")} />;
   }
 
-  if (view === "game") {
-    return <MiniGame onClose={() => setView("menu")} />;
+  if (view === "chess") {
+    return <ChessGame onClose={() => setView("menu")} />;
   }
 
   if (view === "coldwater") {

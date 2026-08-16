@@ -18,6 +18,11 @@ declare module "*.webp" {
   export default src;
 }
 
+declare module "*.svg" {
+  const src: string;
+  export default src;
+}
+
 interface Window {
   Capacitor?: { isNativePlatform?: () => boolean };
 }
