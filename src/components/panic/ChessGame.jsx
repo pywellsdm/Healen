@@ -234,6 +234,7 @@ export default function ChessGame({ onClose }) {
   const [outcome, setOutcome] = useState(null);
   const [captured, setCaptured] = useState({ w: [], b: [] });
   const [lastEval, setLastEval] = useState(null);
+  const [pendingPromotion, setPendingPromotion] = useState(null);
 
   const game = gameRef.current;
   const aiColor = playerColor === "w" ? "b" : "w";
@@ -265,6 +266,7 @@ export default function ChessGame({ onClose }) {
     setOutcome(null);
     setCaptured({ w: [], b: [] });
     setLastEval(null);
+    setPendingPromotion(null);
     capturedStackRef.current = [];
     aiSeqRef.current++;
     hintSeqRef.current++;
@@ -281,6 +283,7 @@ export default function ChessGame({ onClose }) {
     setOutcome(null);
     setCaptured({ w: [], b: [] });
     setLastEval(null);
+    setPendingPromotion(null);
     capturedStackRef.current = [];
     aiSeqRef.current++;
     hintSeqRef.current++;
@@ -352,6 +355,7 @@ export default function ChessGame({ onClose }) {
 
     setSelected(null);
     setLastEval(null);
+    setPendingPromotion(null);
     // Let the player retract a losing final move even after the game ends.
     if (status !== "playing") {
       setOutcome(null);
@@ -445,11 +449,19 @@ export default function ChessGame({ onClose }) {
   const onSquareClick = (square) => {
     if (phase !== "playing" || status !== "playing" || thinking) return;
     if (game.turn() !== playerColor) return;
+    if (pendingPromotion) {
+      setPendingPromotion(null);
+      return;
+    }
 
     if (selected) {
-      const move = legalForSelected.find((m) => m.to === square);
-      if (move) {
-        commitMove(move);
+      const matches = legalForSelected.filter((m) => m.to === square);
+      if (matches.length > 0) {
+        if (matches.some((m) => m.promotion)) {
+          setPendingPromotion({ from: selected, to: square });
+          return;
+        }
+        commitMove(matches[0]);
         return;
       }
       if (square === selected) {
@@ -765,6 +777,35 @@ export default function ChessGame({ onClose }) {
                     </div>
                   ))}
                 </div>
+
+                {/* Promotion picker */}
+                {pendingPromotion && (
+                  <div className="absolute inset-0 flex items-center justify-center z-30">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setPendingPromotion(null)} />
+                    <div className="relative flex gap-1 bg-[#0E0F1A]/95 border border-white/20 rounded-2xl p-2 shadow-2xl">
+                      {["q", "r", "b", "n"].map((type) => (
+                        <button
+                          key={type}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const move = legalForSelected.find(
+                              (m) => m.to === pendingPromotion.to && m.promotion === type
+                            );
+                            setPendingPromotion(null);
+                            if (move) commitMove(move);
+                          }}
+                          className="w-12 h-12 rounded-xl flex items-center justify-center hover:bg-white/10 active:bg-white/20 transition-colors"
+                        >
+                          <img
+                            src={PIECE_IMAGES[playerColor][type]}
+                            alt={type}
+                            className="w-10 h-10 drop-shadow-[0_2px_3px_rgba(0,0,0,0.5)]"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Game over overlay */}
                 {status === "over" && outcome && (
