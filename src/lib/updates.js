@@ -88,10 +88,14 @@ export async function checkForUpdate({ force = false } = {}) {
   release = await fetchLatestRelease();
   if (release?.tag_name) latestVersion = release.tag_name;
 
-  // If the API is unavailable/rate-limited, use the repo's package.json.
-  if (!latestVersion || !isNewer(latestVersion, APP_VERSION)) {
+  // Fallback: if the GitHub API is unavailable or rate-limited (no release
+  // returned at all), try the repo's package.json.  We intentionally skip this
+  // when the release *was* fetched but its version is not newer, because the
+  // package.json on main often contains an unreleased dev version bump that
+  // would trigger a false "update available" popup.
+  if (!latestVersion) {
     const repoVersion = await fetchRepoVersion();
-    if (repoVersion && (!latestVersion || isNewer(repoVersion, latestVersion))) {
+    if (repoVersion) {
       latestVersion = repoVersion;
     }
   }

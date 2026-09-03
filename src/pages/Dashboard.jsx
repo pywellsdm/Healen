@@ -329,22 +329,22 @@ export default function Dashboard() {
                   </div>
                   <input
                     type="range"
-                    min="420"
-                    max="540"
-                    step="15"
+                    min="1"
+                    max="1440"
+                    step="1"
                     value={alarm.durationMin}
                     onChange={(e) => saveAlarm({ durationMin: Number(e.target.value) })}
                     className="w-full"
                   />
                   <p className="text-[10px] text-slate-500 mt-1 flex justify-between">
-                    <span>7h</span>
-                    <span>8h</span>
-                    <span>9h</span>
+                    <span>1 min</span>
+                    <span>{durationLabel(alarm.durationMin)}</span>
+                    <span>24h</span>
                   </p>
                   <p className="text-[11px] text-slate-500 mt-1.5">
                     {ringTime
                       ? `${ringCountdown} until it rings`
-                      : "Your alarm rings after 7-9 hours of rest, once per night."}
+                      : "Your alarm rings after your configured duration, once per night."}
                   </p>
                 </div>
               )}

@@ -3,10 +3,11 @@ import { ensureStreakRecord } from "@/lib/streakUtils";
 
 export const DEFAULT_ALARM_AUDIO = "/audio/default-ringtone.mp3";
 
-// Healthy sleep window: the alarm can only wake you 7-9 hours after sleep starts.
-export const MIN_ALARM_MINUTES = 7 * 60; // 420
-export const MAX_ALARM_MINUTES = 9 * 60; // 540
-export const DEFAULT_ALARM_MINUTES = 8 * 60; // 480
+// Healthy sleep window: the alarm can ring 1-24 hours after sleep starts.
+// During testing, the full range is available; we'll restore the 7-9h window later.
+export const MIN_ALARM_MINUTES = 1; // 1 minute minimum for testing
+export const MAX_ALARM_MINUTES = 24 * 60; // 24 hours max
+export const DEFAULT_ALARM_MINUTES = 8 * 60; // 8 hours
 export const ALARM_STALE_MINUTES = 20 * 60; // a session older than 20h never rings
 
 export function clampDuration(min) {

@@ -714,7 +714,7 @@ export default function Settings() {
       <Section icon={AlarmClock} title="Sleep Alarm">
         <p className="text-xs text-slate-400 mb-3 leading-relaxed">
           Wake up to a Healen alarm after a healthy night of rest. It rings
-          once, 7-9 hours after your sleep session starts — then never again
+          once after your configured duration — then never again
           until your next night.
         </p>
 
@@ -773,20 +773,20 @@ export default function Settings() {
             </div>
             <input
               type="range"
-              min="420"
-              max="540"
-              step="15"
+              min="1"
+              max="1440"
+              step="1"
               value={alarm.durationMin}
               onChange={(e) => saveAlarm({ durationMin: Number(e.target.value) })}
               className="w-full"
             />
             <p className="text-[10px] text-slate-500 mt-1 flex justify-between">
-              <span>7h</span>
-              <span>8h</span>
-              <span>9h</span>
+              <span>1 min</span>
+              <span>{durationLabel(alarm.durationMin)}</span>
+              <span>24h</span>
             </p>
             <p className="text-[11px] text-slate-500 mt-1.5">
-              Your alarm rings after this much rest, once per night, from sleep mode.
+              Your alarm rings after this much rest, once per night.
             </p>
           </div>
         )}

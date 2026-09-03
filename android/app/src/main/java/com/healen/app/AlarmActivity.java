@@ -3,10 +3,13 @@ package com.healen.app;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.Gravity;
@@ -23,6 +26,9 @@ public class AlarmActivity extends Activity {
 
     private MediaPlayer player;
     private Vibrator vibrator;
+    private AudioManager audioManager;
+    private AudioManager.OnAudioFocusChangeListener audioFocusListener;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,6 +109,24 @@ public class AlarmActivity extends Activity {
         });
 
         setContentView(root);
+
+        // Acquire a wake lock to keep the CPU running even if the screen is off
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm != null) {
+            wakeLock = pm.newWakeLock(
+                    PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.ON_AFTER_RELEASE,
+                    "healen:alarm_wakelock");
+            wakeLock.acquire(30 * 60 * 1000L); // 30 minutes max
+        }
+
+        // Set up audio manager and maximize alarm volume
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null) {
+            // Set alarm stream volume to max
+            int maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM);
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVol, 0);
+        }
+
         startSound();
     }
 
@@ -113,11 +137,31 @@ public class AlarmActivity extends Activity {
                 player = MediaPlayer.create(this, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION));
             }
             if (player != null) {
+                // Use STREAM_ALARM so the sound plays through the alarm channel
+                // at max volume, even when the phone is locked or in Doze mode.
+                player.setAudioAttributes(new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build());
                 player.setLooping(true);
+                player.setVolume(1.0f, 1.0f);
                 player.start();
             }
         } catch (Exception ignored) {
         }
+
+        // Request audio focus on the alarm stream so other apps quiet down
+        audioFocusListener = focusChange -> {
+            // Restart if we lose focus briefly (e.g., another notification)
+            if (focusChange == AudioManager.AUDIOFOCUS_GAIN && player != null && !player.isPlaying()) {
+                try { player.start(); } catch (Exception ignored) {}
+            }
+        };
+        if (audioManager != null) {
+            audioManager.requestAudioFocus(audioFocusListener,
+                    AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+        }
+
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (vibrator != null && vibrator.hasVibrator()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -140,6 +184,18 @@ public class AlarmActivity extends Activity {
         }
         if (vibrator != null) {
             vibrator.cancel();
+        }
+        // Release audio focus
+        if (audioManager != null && audioFocusListener != null) {
+            try {
+                audioManager.abandonAudioFocus(audioFocusListener);
+            } catch (Exception ignored) {}
+        }
+        // Release wake lock
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try {
+                wakeLock.release();
+            } catch (Exception ignored) {}
         }
     }
 
