@@ -48,7 +48,7 @@ const THEME_COLORS = [
 
 export default function Settings() {
   const { toast } = useToast();
-  const { wallpaperUrl, setWallpaper, resetWallpaper, wallpaperBlur, setBlur, themeColor, setThemeColor, hasCustomWallpaper } = useTheme();
+  const { wallpaperUrl, setWallpaper, resetWallpaper, wallpaperBlur, setBlur, themeColor, setThemeColor, hasCustomWallpaper, videoWallpaperUrl, setVideoWallpaper } = useTheme();
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -56,6 +56,7 @@ export default function Settings() {
   const [customPrompt, setCustomPrompt] = useState("");
   const fileRef = useRef(null);
   const restoreRef = useRef(null);
+  const videoFileRef = useRef(null);
   const [backupCode, setBackupCode] = useState("");
   const [restoreCode, setRestoreCode] = useState("");
   const [backupMsg, setBackupMsg] = useState("");
@@ -69,6 +70,7 @@ export default function Settings() {
   const [aiSaved, setAiSaved] = useState(false);
   const [wallpaperMsg, setWallpaperMsg] = useState("");
   const [resetMsg, setResetMsg] = useState("");
+  const [videoWallpaperMsg, setVideoWallpaperMsg] = useState("");
 
   // Local form state
   const [name, setName] = useState("");
@@ -458,6 +460,68 @@ export default function Settings() {
           </div>
         )}
 
+        <div className="mt-4 pt-3 border-t border-white/5">
+          <label className="text-xs text-slate-400 mb-2 flex items-center gap-1.5"><Image className="w-3.5 h-3.5" /> Video background</label>
+          <p className="text-[11px] text-slate-500 mb-2">Use a looping video instead of an image. Colors auto-match its dominant hue.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => videoFileRef.current?.click()}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-slate-300 hover:bg-white/10 transition-colors"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              {videoWallpaperUrl ? "Change Video" : "Upload Video"}
+            </button>
+            {videoWallpaperUrl && (
+              <button
+                onClick={async () => {
+                  await setVideoWallpaper(null);
+                  setVideoWallpaperMsg("Video background removed.");
+                  setTimeout(() => setVideoWallpaperMsg(""), 2500);
+                }}
+                className="px-3 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <input
+            ref={videoFileRef}
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              if (file.size > 50 * 1024 * 1024) {
+                toast({ title: "File too large", description: "Please use a video under 50 MB.", variant: "destructive" });
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = async () => {
+                try {
+                  await setVideoWallpaper(reader.result);
+                  setVideoWallpaperMsg("Video background set.");
+                  setTimeout(() => setVideoWallpaperMsg(""), 2500);
+                } catch (err) {
+                  toast({ title: "Video could not be stored", description: "This video is too large for this device.", variant: "destructive" });
+                }
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+          {videoWallpaperMsg && (
+            <p className="text-[11px] text-emerald-400/80 mt-2 flex items-center gap-1">
+              <Check className="w-3 h-3" /> {videoWallpaperMsg}
+            </p>
+          )}
+          {videoWallpaperUrl && (
+            <div className="mt-2 rounded-xl overflow-hidden border border-white/10">
+              <video src={videoWallpaperUrl} muted autoPlay loop playsInline className="w-full h-24 object-cover" />
+            </div>
+          )}
+        </div>
+
         <div className="mt-4">
           <div className="flex justify-between items-center mb-2">
             <label className="text-xs text-slate-400 flex items-center gap-1"><Palette className="w-3 h-3" /> Theme color</label>
@@ -714,7 +778,7 @@ export default function Settings() {
       <Section icon={AlarmClock} title="Sleep Alarm">
         <p className="text-xs text-slate-400 mb-3 leading-relaxed">
           Wake up to a Healen alarm after a healthy night of rest. It rings
-          once after your configured duration — then never again
+          once, 7-10 hours after your sleep session starts — then never again
           until your next night.
         </p>
 
@@ -773,17 +837,18 @@ export default function Settings() {
             </div>
             <input
               type="range"
-              min="1"
-              max="1440"
-              step="1"
+              min="420"
+              max="600"
+              step="5"
               value={alarm.durationMin}
               onChange={(e) => saveAlarm({ durationMin: Number(e.target.value) })}
               className="w-full"
             />
             <p className="text-[10px] text-slate-500 mt-1 flex justify-between">
-              <span>1 min</span>
-              <span>{durationLabel(alarm.durationMin)}</span>
-              <span>24h</span>
+              <span>7h</span>
+              <span>8h</span>
+              <span>9h</span>
+              <span>10h</span>
             </p>
             <p className="text-[11px] text-slate-500 mt-1.5">
               Your alarm rings after this much rest, once per night.

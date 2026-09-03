@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BellRing, Sunrise, Pause } from "lucide-react";
+import { BellRing, Sunrise, Pause, Moon } from "lucide-react";
 import {
   getAlarmSettings,
   saveAlarmSettings,
@@ -10,7 +10,11 @@ import {
   formatAlarmTime,
   durationLabel,
 } from "@/lib/alarm";
-import { ensureStreakRecord } from "@/lib/streakUtils";
+import {
+  ensureStreakRecord,
+  missedBedtime,
+  applyMissedBedtime,
+} from "@/lib/streakUtils";
 import { LocalNotification } from "@/lib/localNotifications";
 import { IS_NATIVE } from "@/lib/appInfo";
 
@@ -28,6 +32,7 @@ export default function AlarmSystem({ children }) {
   const [streak, setStreak] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [snoozeUntil, setSnoozeUntil] = useState(null);
+  const [bedtimeMissed, setBedtimeMissed] = useState(false);
   const settingsRef = useRef(null);
   const streakRef = useRef(null);
   const snoozeUntilRef = useRef(null);
@@ -69,10 +74,20 @@ export default function AlarmSystem({ children }) {
         .then((st) => {
           streakRef.current = st;
           setStreak(st);
+          // Healthy-bedtime rule: if it's past 11 PM and there's no active
+          // sleep session, the night is missed — reset the sleep streak once.
+          if (missedBedtime(st)) {
+            return applyMissedBedtime(st).then((next) => {
+              streakRef.current = next;
+              setStreak(next);
+              setBedtimeMissed(true);
+            });
+          }
         })
         .catch(() => {});
     };
     const t = setInterval(poll, STREAK_POLL_MS);
+    poll();
     const onVisible = () => {
       if (!document.hidden) refresh();
     };
@@ -207,6 +222,9 @@ export default function AlarmSystem({ children }) {
             onSnooze={snooze}
           />
         )}
+        {bedtimeMissed && (
+          <BedtimeMissedOverlay onClose={() => setBedtimeMissed(false)} />
+        )}
       </AnimatePresence>
     </AlarmContext.Provider>
   );
@@ -263,6 +281,41 @@ function AlarmOverlay({ settings, streak, onDismiss, onSnooze }) {
             Dismiss
           </button>
         </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function BedtimeMissedOverlay({ onClose }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[300] flex items-center justify-center p-6"
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="relative pointer-events-auto w-full max-w-xs bg-[#0E0F1A]/95 border border-rose-500/30 rounded-3xl p-6 text-center shadow-2xl animate-pop-in">
+        <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-rose-500/20 border border-rose-400/30 flex items-center justify-center">
+          <Moon className="w-7 h-7 text-rose-300" />
+        </div>
+        <p className="text-[10px] uppercase tracking-[0.25em] text-rose-300/90 font-semibold mb-1">
+          Missed healthy sleep window
+        </p>
+        <h2 className="text-xl font-bold text-white mb-2">You weren't in bed by 11 PM</h2>
+        <p className="text-xs text-slate-400 leading-relaxed mb-1">
+          To keep your healthy-sleep streak, you need to be in bed by 11 PM.
+          Because you missed tonight's window, your sleep streak restarted.
+        </p>
+        <p className="text-xs text-slate-500 mb-5">
+          Don't worry — get a full night tomorrow and start fresh.
+        </p>
+        <button
+          onClick={onClose}
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-bold hover:opacity-90 transition-opacity"
+        >
+          Got it
+        </button>
       </div>
     </motion.div>
   );

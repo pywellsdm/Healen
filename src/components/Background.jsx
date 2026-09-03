@@ -1,10 +1,24 @@
 import { useTheme } from "@/lib/ThemeContext";
 
 export default function Background() {
-  const { wallpaperUrl, wallpaperBlur } = useTheme();
+  const { wallpaperUrl, wallpaperBlur, videoWallpaperUrl } = useTheme();
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {wallpaperUrl ? (
+      {videoWallpaperUrl ? (
+        <>
+          <video
+            key={videoWallpaperUrl}
+            src={videoWallpaperUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ filter: `blur(${wallpaperBlur}px)`, transform: `scale(${1 + wallpaperBlur / 50})` }}
+          />
+          <div className="absolute inset-0 bg-black/40" />
+        </>
+      ) : wallpaperUrl ? (
         <>
           <img
             src={wallpaperUrl}

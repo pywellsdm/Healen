@@ -41,6 +41,7 @@ export async function ensureStreakRecord() {
     sleep_total_resets: 0,
     sleep_last_success_date: null,
     sleep_last_duration_min: null,
+    sleep_last_miss_check_date: null,
     alarm_enabled: false,
     alarm_duration_min: 480,
     alarm_sound: "default",
@@ -167,11 +168,15 @@ export function formatDuration(min) {
   return `${h}h ${m}m`;
 }
 
-export async function wakeUp(record) {
+export async function wakeUp(record, { fallAsleepMin = 0 } = {}) {
   if (!record?.sleep_session_start) return { status: "none", streak: record };
   const end = new Date().toISOString();
   const start = new Date(record.sleep_session_start);
-  const durationMin = Math.max(0, Math.round((new Date(end).getTime() - start.getTime()) / 60000));
+  // Actual rest = time from session start until now, minus the minutes it took
+  // to actually fall asleep (the user picks 1-59). This gives an accurate
+  // sleep duration instead of counting lying-in-bed time.
+  const fall = Math.min(59, Math.max(0, Math.round(fallAsleepMin)));
+  const durationMin = Math.max(0, Math.round((new Date(end).getTime() - start.getTime()) / 60000) - fall);
 
   let status = "success";
   if (durationMin < SLEEP_MIN_MINUTES) status = "short";
@@ -220,4 +225,34 @@ export async function wakeUp(record) {
   });
 
   return { status, durationMin, streak: next };
+}
+
+// ---------------- Healthy bedtime rule ----------------
+// You need to be in bed by 11 PM (local) to keep your healthy-sleep streak.
+// If it's past 11 PM and there's no active sleep session, you've missed the
+// window: your sleep streak resets (once per day).
+export const BEDTIME_HOUR = 23; // 11:00 PM
+export const BEDTIME_MINUTE = 0;
+
+export function missedBedtime(record, now = new Date()) {
+  if (record?.sleep_session_start) return false;
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const pastBedtime = h > BEDTIME_HOUR || (h === BEDTIME_HOUR && m >= BEDTIME_MINUTE);
+  if (!pastBedtime) return false;
+  // Only count the miss once per day, so it doesn't re-fire all night.
+  const lastCheck = record?.sleep_last_miss_check_date || null;
+  const today = localDateStr(now.toISOString());
+  return lastCheck !== today;
+}
+
+export async function applyMissedBedtime(record) {
+  const now = new Date();
+  const today = localDateStr(now.toISOString());
+  const resets = (record.sleep_total_resets || 0) + 1;
+  return db.entities.Streak.update(record.id, {
+    sleep_current_streak_days: 0,
+    sleep_total_resets: resets,
+    sleep_last_miss_check_date: today,
+  });
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Moon, Sunrise, Check, AlertTriangle } from "lucide-react";
+import { Moon, Sunrise, Check, AlertTriangle, X, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   startSleepSession,
@@ -16,6 +16,8 @@ export default function SleepTracker({ streak, onRefresh, onWakeSuccess }) {
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+  const [waking, setWaking] = useState(false);
+  const [fallAsleepMin, setFallAsleepMin] = useState(15);
 
   const sleeping = !!streak?.sleep_session_start;
   const elapsed = sleeping ? sleepElapsedMin(streak) : 0;
@@ -65,17 +67,32 @@ export default function SleepTracker({ streak, onRefresh, onWakeSuccess }) {
   const handleWake = async () => {
     setBusy(true);
     try {
-      const { status, durationMin, streak: next } = await wakeUp(streak);
+      const { status, durationMin, streak: next } = await wakeUp(streak, { fallAsleepMin });
       if (onRefresh) await onRefresh();
       setNow(Date.now());
+      setWaking(false);
       if (status === "success") {
         showResult(`Nice — ${formatDuration(durationMin)} of real rest. Your sleep streak is now ${next.sleep_current_streak_days} night${next.sleep_current_streak_days === 1 ? "" : "s"}.`, "success");
         onWakeSuccess?.({ status, durationMin, streak: next });
       } else if (status === "short") {
         showResult(`${formatDuration(durationMin)} is under 7 hours — it doesn't count toward your streak. Try to get a full night tonight.`, "warn");
       } else if (status === "overslept") {
-        showResult(`${formatDuration(durationMin)} is over 9 hours — oversleeping isn't healthy and doesn't count. Aim for 7-9 hours.`, "warn");
+        showResult(`${formatDuration(durationMin)} is over 10 hours — oversleeping isn't healthy and doesn't count. Aim for 7-10 hours.`, "warn");
       }
+    } catch (e) {
+      showResult(e.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    setBusy(true);
+    setWaking(false);
+    try {
+      await abandonSleepSession(streak);
+      if (onRefresh) await onRefresh();
+      showResult("Sleep session cancelled — your streak is safe. You can start again whenever you're ready.", "success");
     } catch (e) {
       showResult(e.message, "error");
     } finally {
@@ -108,19 +125,69 @@ export default function SleepTracker({ streak, onRefresh, onWakeSuccess }) {
         {overMax && (
           <div className="flex items-center gap-2 mb-3 rounded-xl bg-rose-950/30 border border-rose-800/30 px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-            <p className="text-[11px] text-rose-300">Over 9 hours. Oversleeping won't count toward your streak — time to get up.</p>
+            <p className="text-[11px] text-rose-300">Over 10 hours. Oversleeping won't count toward your streak — time to get up.</p>
           </div>
         )}
 
-        <motion.button
-          onClick={handleWake}
-          disabled={busy}
-          whileTap={{ scale: 0.97 }}
-          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          <Sunrise className="w-4 h-4" />
-          {busy ? "Waking up..." : "I woke up"}
-        </motion.button>
+        {waking ? (
+          <div className="rounded-xl bg-white/5 border border-white/10 p-3 mb-3">
+            <p className="text-sm font-semibold text-white flex items-center gap-2 mb-1">
+              <Clock className="w-4 h-4 text-indigo-300" /> How long to fall asleep?
+            </p>
+            <p className="text-xs text-slate-400 mb-3">Picked so your real sleep time is accurate. How many minutes do you think it took to fall asleep?</p>
+            <div className="flex items-center gap-3 mb-3">
+              <label className="text-xs text-slate-400 shrink-0">Minutes</label>
+              <input
+                type="range"
+                min="1"
+                max="59"
+                step="1"
+                value={fallAsleepMin}
+                onChange={(e) => setFallAsleepMin(Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="text-sm font-bold text-indigo-300 w-10 text-right tabular-nums">{fallAsleepMin}m</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setWaking(false)}
+                disabled={busy}
+                className="flex-1 py-2.5 rounded-xl bg-white/10 text-slate-200 text-sm font-medium hover:bg-white/15 transition-colors disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleWake}
+                disabled={busy}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-semibold flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                <Sunrise className="w-4 h-4" />
+                Confirm wake up
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2 mb-3">
+            <motion.button
+              onClick={() => setWaking(true)}
+              disabled={busy}
+              whileTap={{ scale: 0.97 }}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              <Sunrise className="w-4 h-4" />
+              I woke up
+            </motion.button>
+            <motion.button
+              onClick={handleCancel}
+              disabled={busy}
+              whileTap={{ scale: 0.97 }}
+              className="w-full py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-300 text-xs font-medium flex items-center justify-center gap-2 hover:bg-rose-500/20 transition-opacity disabled:opacity-50"
+            >
+              <X className="w-3.5 h-3.5" />
+              {busy ? "Cancelling..." : "Cancel — I couldn't sleep"}
+            </motion.button>
+          </div>
+        )}
       </div>
     );
   }
