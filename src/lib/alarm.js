@@ -147,7 +147,12 @@ export function formatAlarmTime(sleepStartIso, durationMin) {
   });
 }
 
+// Format a sleep-goal duration in minutes as a clean, human-friendly label
+// (e.g. 465 -> "7h 45m", 480 -> "8h") so sliders never show long decimals.
 export function durationLabel(min) {
-  const h = clampDuration(min) / 60;
-  return `${h} hours`;
+  const clamped = clampDuration(min);
+  const h = Math.floor(clamped / 60);
+  const m = Math.round(clamped % 60);
+  if (m === 0) return `${h} hours`;
+  return `${h}h ${m}m`;
 }

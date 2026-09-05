@@ -205,8 +205,8 @@ export default function SleepTracker({ streak, onRefresh, onWakeSuccess }) {
       </div>
 
       <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-        Sleep <span className="text-slate-200 font-medium">7-9 hours</span> to count toward your streak.
-        Under 7 hours resets it; over 9 is too much.
+        Sleep <span className="text-slate-200 font-medium">7-10 hours</span> to count toward your streak.
+        Under 7 hours resets it; over 10 is too much.
       </p>
 
       {typeof streak?.sleep_last_duration_min === "number" && (

@@ -217,12 +217,13 @@ function Segmented({ options, value, onChange, render = null, className = "" }) 
 }
 
 export default function ChessGame({ onClose }) {
-  const { wallpaperUrl, wallpaperBlur } = useTheme();
+  const { wallpaperUrl, wallpaperBlur, videoWallpaperUrl, wallpaperZoom, wallpaperPosX, wallpaperPosY } = useTheme();
   const gameRef = useRef(new Chess());
 
   const [phase, setPhase] = useState("setup"); // setup | playing
   const [status, setStatus] = useState("playing"); // playing | over
   const [version, setVersion] = useState(0);
+  const [videoReady, setVideoReady] = useState(false);
   const [sideChoice, setSideChoice] = useState("w"); // w | b | random
   const [playerColor, setPlayerColor] = useState("w");
   const [botElo, setBotElo] = useState(DEFAULT_ELO);
@@ -536,14 +537,40 @@ export default function ChessGame({ onClose }) {
   const resultEmoji = outcome?.winner === playerColor ? "🏆" : outcome?.winner ? "🤖" : "🤝";
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-hidden">
-      {/* Wallpaper backdrop — matches the app's background image */}
+    <div className="fixed inset-0 z-[100] overflow-hidden bg-black">
+      {/* Wallpaper backdrop — matches the app's background (image or video) */}
       {wallpaperUrl && (
         <img
           src={wallpaperUrl}
           alt=""
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ filter: `blur(${wallpaperBlur}px)`, transform: `scale(${1 + wallpaperBlur / 50})` }}
+          style={{
+            filter: `blur(${wallpaperBlur}px)`,
+            transform: `scale(${(wallpaperZoom || 1) * (1 + wallpaperBlur / 60)})`,
+            objectPosition: `${wallpaperPosX}% ${wallpaperPosY}%`,
+          }}
+        />
+      )}
+      {videoWallpaperUrl && (
+        <video
+          src={videoWallpaperUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          disablePictureInPicture
+          controlsList="nodownload"
+          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
+          style={{
+            filter: `blur(${wallpaperBlur}px)`,
+            transform: `scale(${(wallpaperZoom || 1) * (1 + wallpaperBlur / 60)})`,
+            objectPosition: `${wallpaperPosX}% ${wallpaperPosY}%`,
+            background: "transparent",
+            opacity: videoReady ? 1 : 0,
+          }}
+          onLoadedData={() => setVideoReady(true)}
+          onCanPlay={() => setVideoReady(true)}
         />
       )}
       <div className="absolute inset-0 bg-black/55" />

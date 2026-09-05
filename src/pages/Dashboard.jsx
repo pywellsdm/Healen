@@ -240,9 +240,9 @@ export default function Dashboard() {
                 <span className="text-sm font-bold text-indigo-200 tabular-nums">{sleepDays}</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full px-3 py-1.5">
-                <Flame className="w-4 h-4 text-orange-400" />
-                <span className="text-sm font-bold text-orange-300 tabular-nums">{currentDays}</span>
+              <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1.5">
+                <Flame className="w-4 h-4 text-indigo-300" />
+                <span className="text-sm font-bold text-indigo-200 tabular-nums">{currentDays}</span>
               </div>
             )}
           </div>

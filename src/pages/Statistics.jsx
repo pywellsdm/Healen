@@ -144,7 +144,7 @@ export default function Statistics() {
   ];
 
   const stats = [
-    { icon: Flame, label: "Current Streak", value: currentDays, unit: "days", color: "text-orange-400" },
+    { icon: Flame, label: "Current Streak", value: currentDays, unit: "days", color: "text-indigo-300" },
     { icon: Award, label: "Longest Streak", value: bestDays, unit: "days", color: "text-yellow-400" },
     { icon: Calendar, label: "Total Days", value: getTotalAppDays(streak), unit: "days", color: "text-emerald-400" },
     { icon: Target, label: "Success Rate", value: successRate, unit: "%", color: "text-indigo-400" },
@@ -210,7 +210,7 @@ export default function Statistics() {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
               <p className="text-sm font-semibold text-white mb-1">Sleep Duration — Last {sleepChart.length} Nights</p>
               <p className="text-xs text-slate-500 mb-4">
-                Bars show hours slept each night. The amber band marks your <span className="text-amber-300">7-9h target</span> —
+                Bars show hours slept each night. The amber band marks your <span className="text-amber-300">7-10h target</span> —
                 bars below it were too short, bars above it were oversleep.
               </p>
               {sleepEntries.length === 0 ? (

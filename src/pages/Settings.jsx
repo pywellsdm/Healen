@@ -13,7 +13,7 @@ import {
   User, Bell, Heart, Target, Save, Sparkles, Trash2,
   Palette, Image, Bot, Upload, Copy, Check,
   Wifi, WifiOff, Download, ArchiveRestore, FileUp, Bitcoin, Wallet,
-  AlarmClock, Volume2, Music,
+  AlarmClock, Volume2, Music, Crop, Move, RotateCcw,
 } from "lucide-react";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
@@ -27,28 +27,44 @@ const TONES = [
 
 const GOALS = [7, 14, 30, 45, 60, 90, 180, 365];
 
-const THEME_COLORS = [
-  { key: "auto", label: "Match wallpaper", hue: null, swatch: null },
-  { key: "red", label: "Red", hue: 0, swatch: "#ef4444" },
-  { key: "orange", label: "Orange", hue: 25, swatch: "#f97316" },
-  { key: "amber", label: "Amber", hue: 45, swatch: "#f59e0b" },
-  { key: "lime", label: "Lime", hue: 80, swatch: "#84cc16" },
-  { key: "green", label: "Green", hue: 134, swatch: "#22c55e" },
-  { key: "teal", label: "Teal", hue: 170, swatch: "#14b8a6" },
-  { key: "cyan", label: "Cyan", hue: 190, swatch: "#06b6d4" },
-  { key: "sky", label: "Sky", hue: 205, swatch: "#0ea5e9" },
-  { key: "blue", label: "Blue", hue: 225, swatch: "#3b82f6" },
-  { key: "indigo", label: "Indigo", hue: 248, swatch: "#6366f1" },
-  { key: "violet", label: "Violet", hue: 270, swatch: "#8b5cf6" },
-  { key: "purple", label: "Purple", hue: 290, swatch: "#a855f7" },
-  { key: "fuchsia", label: "Fuchsia", hue: 310, swatch: "#d946ef" },
-  { key: "pink", label: "Pink", hue: 330, swatch: "#ec4899" },
-  { key: "rose", label: "Rose", hue: 350, swatch: "#f43f5e" },
-];
+// Convert a stored hue (0–360) into a hex value for the <input type="color">.
+function hslToHex(hue) {
+  const h = (((Number(hue) % 360) + 360) % 360) / 360;
+  const s = 0.7;
+  const l = 0.6;
+  const f = (n) => {
+    const k = (n + h * 12) % 12;
+    const c = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+    return Math.round(255 * c).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+// Extract the dominant hue (0–360) from a hex color for the manual theme color.
+function hueFromHex(hex) {
+  const m = String(hex || "").replace(/^#/, "");
+  const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+  const int = parseInt(full.slice(0, 6), 16);
+  if (!Number.isFinite(int)) return "auto";
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d === 0) return "auto";
+  let h;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  return String(h);
+}
 
 export default function Settings() {
   const { toast } = useToast();
-  const { wallpaperUrl, setWallpaper, resetWallpaper, wallpaperBlur, setBlur, themeColor, setThemeColor, hasCustomWallpaper, videoWallpaperUrl, setVideoWallpaper } = useTheme();
+  const { wallpaperUrl, wallpaperBlur, setBlur, themeColor, setThemeColor, hasCustomWallpaper, videoWallpaperUrl, wallpaperZoom, setWallpaperZoom, wallpaperPosX, setWallpaperPosX, wallpaperPosY, setWallpaperPosY, resetCrop, uploadWallpaper, removeWallpaper, isVideoCustom } = useTheme();
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -56,7 +72,7 @@ export default function Settings() {
   const [customPrompt, setCustomPrompt] = useState("");
   const fileRef = useRef(null);
   const restoreRef = useRef(null);
-  const videoFileRef = useRef(null);
+  const dragRef = useRef(null);
   const [backupCode, setBackupCode] = useState("");
   const [restoreCode, setRestoreCode] = useState("");
   const [backupMsg, setBackupMsg] = useState("");
@@ -70,7 +86,6 @@ export default function Settings() {
   const [aiSaved, setAiSaved] = useState(false);
   const [wallpaperMsg, setWallpaperMsg] = useState("");
   const [resetMsg, setResetMsg] = useState("");
-  const [videoWallpaperMsg, setVideoWallpaperMsg] = useState("");
 
   // Local form state
   const [name, setName] = useState("");
@@ -136,6 +151,43 @@ export default function Settings() {
       setCopiedAddr(key);
       setTimeout(() => setCopiedAddr(""), 1500);
     }
+  };
+
+  const updateDragFromEvent = (e) => {
+    const el = dragRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX ?? e.touches?.[0]?.clientX ?? 0) - rect.left) / rect.width * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY ?? e.touches?.[0]?.clientY ?? 0) - rect.top) / rect.height * 100));
+    setWallpaperPosX(x);
+    setWallpaperPosY(y);
+  };
+
+  const startDrag = (e) => {
+    e.preventDefault();
+    dragRef.current = e.currentTarget;
+    updateDragFromEvent(e);
+    const move = (ev) => updateDragFromEvent(ev);
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      dragRef.current = null;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+
+  const onDrag = (e) => {
+    if (dragRef.current) {
+      e.preventDefault();
+      updateDragFromEvent(e);
+    }
+  };
+
+  const endDrag = () => {
+    dragRef.current = null;
   };
 
   useEffect(() => {
@@ -384,6 +436,10 @@ export default function Settings() {
       {/* Appearance */}
       <Section icon={Palette} title="Appearance">
         <p className="text-xs text-slate-400 mb-2">Wallpaper</p>
+        <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+          Upload one wallpaper — an image or a looping video. It's shown everywhere,
+          and your accent color auto-matches its dominant hue (or pick your own below).
+        </p>
         <div className="flex gap-2 mb-3">
           <button
             onClick={() => fileRef.current?.click()}
@@ -393,37 +449,37 @@ export default function Settings() {
             {uploading ? (
               <><div className="w-4 h-4 border-2 border-slate-600 border-t-indigo-400 rounded-full animate-spin" /> Uploading...</>
             ) : (
-              <><Upload className="w-4 h-4" /> Upload Image</>
+              <><Upload className="w-4 h-4" /> Upload Wallpaper</>
             )}
           </button>
           {hasCustomWallpaper && (
             <button
               onClick={async () => {
-                await resetWallpaper();
-                setWallpaperMsg("Reset to the default wallpaper.");
+                await removeWallpaper();
+                setWallpaperMsg("Removed your wallpaper — back to the default.");
                 setTimeout(() => setWallpaperMsg(""), 2500);
               }}
               className="px-3 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm"
             >
-              Reset to default
+              Remove
             </button>
           )}
           <input
             ref={fileRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/mp4,video/webm,video/quicktime"
             className="hidden"
             onChange={async (e) => {
               const file = e.target.files?.[0];
+              e.target.value = "";
               if (!file) return;
               setUploading(true);
               try {
-                const { file_url } = await db.integrations.Core.UploadFile({ file });
-                await setWallpaper(file_url);
-                setWallpaperMsg("Wallpaper set.");
+                const res = await uploadWallpaper(file);
+                setWallpaperMsg(res?.type === "video" ? "Video wallpaper set." : "Wallpaper set.");
                 setTimeout(() => setWallpaperMsg(""), 2500);
               } catch (err) {
-                toast({ title: "Upload failed", variant: "destructive" });
+                toast({ title: "Upload failed", description: err?.message, variant: "destructive" });
               } finally {
                 setUploading(false);
               }
@@ -437,116 +493,138 @@ export default function Settings() {
           </p>
         )}
 
-        {wallpaperUrl && (
-          <div className="mb-3">
-            <div className="flex justify-between mb-1">
-              <label className="text-xs text-slate-400 flex items-center gap-1"><Image className="w-3 h-3" /> Blur</label>
-              <span className="text-xs text-indigo-300">{wallpaperBlur}px</span>
+        {(isVideoCustom || wallpaperUrl) && (
+          <>
+            {/* Blur */}
+            <div className="mb-3">
+              <div className="flex justify-between mb-1">
+                <label className="text-xs text-slate-400 flex items-center gap-1"><Image className="w-3 h-3" /> Blur</label>
+                <span className="text-xs text-indigo-300">{wallpaperBlur}px</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="40"
+                step="1"
+                value={wallpaperBlur}
+                onChange={(e) => setBlur(Number(e.target.value))}
+                className="w-full"
+              />
             </div>
-            <input
-              type="range"
-              min="0"
-              max="40"
-              value={wallpaperBlur}
-              onChange={(e) => setBlur(Number(e.target.value))}
-              className="w-full"
-            />
-          </div>
-        )}
 
-        {wallpaperUrl && (
-          <div className="rounded-xl overflow-hidden border border-white/10 mb-1">
-            <img src={wallpaperUrl} alt="wallpaper preview" className="w-full h-24 object-cover" style={{ filter: `blur(${wallpaperBlur}px)` }} />
-          </div>
-        )}
+            {/* Zoom */}
+            <div className="mb-3">
+              <div className="flex justify-between mb-1">
+                <label className="text-xs text-slate-400 flex items-center gap-1"><Crop className="w-3 h-3" /> Zoom</label>
+                <span className="text-xs text-indigo-300">{Math.round(wallpaperZoom * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="100"
+                max="300"
+                step="1"
+                value={Math.round(wallpaperZoom * 100)}
+                onChange={(e) => setWallpaperZoom(Number(e.target.value) / 100)}
+                className="w-full"
+              />
+            </div>
 
-        <div className="mt-4 pt-3 border-t border-white/5">
-          <label className="text-xs text-slate-400 mb-2 flex items-center gap-1.5"><Image className="w-3.5 h-3.5" /> Video background</label>
-          <p className="text-[11px] text-slate-500 mb-2">Use a looping video instead of an image. Colors auto-match its dominant hue.</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => videoFileRef.current?.click()}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-slate-300 hover:bg-white/10 transition-colors"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              {videoWallpaperUrl ? "Change Video" : "Upload Video"}
-            </button>
-            {videoWallpaperUrl && (
-              <button
-                onClick={async () => {
-                  await setVideoWallpaper(null);
-                  setVideoWallpaperMsg("Video background removed.");
-                  setTimeout(() => setVideoWallpaperMsg(""), 2500);
-                }}
-                className="px-3 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm"
+            {/* Manual position (crop) — drag to choose where the wallpaper shows */}
+            <div className="mb-3">
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs text-slate-400 flex items-center gap-1"><Move className="w-3 h-3" /> Position</label>
+                <button
+                  onClick={resetCrop}
+                  className="text-[10px] text-indigo-300 flex items-center gap-1 hover:text-indigo-200"
+                >
+                  <RotateCcw className="w-3 h-3" /> Reset crop
+                </button>
+              </div>
+              <div
+                className="relative w-full h-32 rounded-xl border border-white/10 overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none"
+                onPointerDown={startDrag}
+                onPointerMove={onDrag}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
               >
-                Remove
-              </button>
-            )}
-          </div>
-          <input
-            ref={videoFileRef}
-            type="file"
-            accept="video/*"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              if (file.size > 50 * 1024 * 1024) {
-                toast({ title: "File too large", description: "Please use a video under 50 MB.", variant: "destructive" });
-                return;
-              }
-              const reader = new FileReader();
-              reader.onload = async () => {
-                try {
-                  await setVideoWallpaper(reader.result);
-                  setVideoWallpaperMsg("Video background set.");
-                  setTimeout(() => setVideoWallpaperMsg(""), 2500);
-                } catch (err) {
-                  toast({ title: "Video could not be stored", description: "This video is too large for this device.", variant: "destructive" });
-                }
-              };
-              reader.readAsDataURL(file);
-            }}
-          />
-          {videoWallpaperMsg && (
-            <p className="text-[11px] text-emerald-400/80 mt-2 flex items-center gap-1">
-              <Check className="w-3 h-3" /> {videoWallpaperMsg}
-            </p>
-          )}
-          {videoWallpaperUrl && (
-            <div className="mt-2 rounded-xl overflow-hidden border border-white/10">
-              <video src={videoWallpaperUrl} muted autoPlay loop playsInline className="w-full h-24 object-cover" />
+                {isVideoCustom ? (
+                  <video
+                    src={videoWallpaperUrl}
+                    muted
+                    autoPlay
+                    loop
+                    playsInline
+                    preload="auto"
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    style={{
+                      transform: `scale(${(wallpaperZoom || 1) * (1 + wallpaperBlur / 30)})`,
+                      objectPosition: `${wallpaperPosX}% ${wallpaperPosY}%`,
+                      filter: `blur(${wallpaperBlur}px)`,
+                    }}
+                  />
+                ) : (
+                  <img
+                    src={wallpaperUrl}
+                    alt=""
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    style={{
+                      transform: `scale(${(wallpaperZoom || 1) * (1 + wallpaperBlur / 30)})`,
+                      objectPosition: `${wallpaperPosX}% ${wallpaperPosY}%`,
+                      filter: `blur(${wallpaperBlur}px)`,
+                    }}
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/25 pointer-events-none" />
+                {/* Crosshair + drag hint */}
+                <div
+                  className="absolute w-6 h-6 rounded-full border-2 border-white/70 pointer-events-none -translate-x-1/2 -translate-y-1/2 shadow-lg"
+                  style={{ left: `${wallpaperPosX}%`, top: `${wallpaperPosY}%` }}
+                />
+                <p className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[10px] text-white/70 bg-black/40 rounded-full px-2 py-0.5 pointer-events-none">
+                  Drag to choose where it shows
+                </p>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Big preview */}
+            <div className="rounded-xl overflow-hidden border border-white/10 mb-1">
+              {isVideoCustom ? (
+                <video src={videoWallpaperUrl} muted autoPlay loop playsInline className="w-full h-24 object-cover pointer-events-none" />
+              ) : (
+                <img src={wallpaperUrl} alt="wallpaper preview" className="w-full h-24 object-cover" />
+              )}
+            </div>
+          </>
+        )}
 
         <div className="mt-4">
           <div className="flex justify-between items-center mb-2">
             <label className="text-xs text-slate-400 flex items-center gap-1"><Palette className="w-3 h-3" /> Theme color</label>
             <span className="text-[10px] text-slate-500">Auto uses your wallpaper</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {THEME_COLORS.map((c) => {
-              const value = c.hue == null ? "auto" : String(c.hue);
-              const active = themeColor === value;
-              return (
-                <button
-                  key={c.key}
-                  title={c.label}
-                  aria-label={c.label}
-                  onClick={() => setThemeColor(value)}
-                  className={cn(
-                    "w-8 h-8 rounded-full border-2 transition-all flex items-center justify-center",
-                    active ? "border-white ring-2 ring-white/30 scale-110" : "border-white/20 hover:border-white/60"
-                  )}
-                  style={c.swatch ? { background: c.swatch } : undefined}
-                >
-                  {!c.swatch && <Sparkles className="w-3.5 h-3.5 text-slate-400" />}
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setThemeColor("auto")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-all",
+                themeColor === "auto" ? "bg-indigo-500/15 border-indigo-400/40 text-indigo-200" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+              )}
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Auto
+            </button>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <input
+                type="color"
+                value={themeColor === "auto" ? "#6366f1" : hslToHex(themeColor)}
+                onChange={(e) => setThemeColor(hueFromHex(e.target.value))}
+                aria-label="Pick a custom theme color"
+                className="w-10 h-10 rounded-xl border border-white/20 bg-transparent p-0.5 cursor-pointer shrink-0"
+              />
+              <p className="text-[11px] text-slate-500 truncate">
+                {themeColor === "auto" ? "Pick any color you like" : `Custom — hue ${themeColor}°`}
+              </p>
+            </div>
           </div>
         </div>
       </Section>

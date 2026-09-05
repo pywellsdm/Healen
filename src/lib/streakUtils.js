@@ -133,7 +133,7 @@ export function formatTime(dateStr) {
 
 // ---------------- Sleep tracking ----------------
 export const SLEEP_MIN_MINUTES = 7 * 60; // 7 hours
-export const SLEEP_MAX_MINUTES = 9 * 60; // 9 hours
+export const SLEEP_MAX_MINUTES = 10 * 60; // 10 hours
 export const SLEEP_STALE_MINUTES = 20 * 60; // a session older than 20h is abandoned
 
 export function localDateStr(iso) {

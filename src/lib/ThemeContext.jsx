@@ -157,12 +157,38 @@ function extractVideoHue(videoUrl) {
   });
 }
 
+export const DEFAULT_WALLPAPER_ZOOM = 1;
+export const DEFAULT_WALLPAPER_POS_X = 50;
+export const DEFAULT_WALLPAPER_POS_Y = 50;
+
+function readNum(key, fallback) {
+  const raw = localStorage.getItem(key);
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export function ThemeProvider({ children }) {
   const [wallpaperUrl, setWallpaperUrlState] = useState(() => localStorage.getItem("reclaim-wallpaper") || DEFAULT_WALLPAPER);
   const [wallpaperBlur, setWallpaperBlurState] = useState(() => Number(localStorage.getItem("reclaim-blur")) || DEFAULT_BLUR);
   const [themeColor, setThemeColorState] = useState(() => localStorage.getItem("reclaim-theme-color") || "auto");
   const [videoWallpaperUrl, setVideoWallpaperUrlState] = useState(() => localStorage.getItem("reclaim-video-wallpaper") || null);
+  const [wallpaperZoom, setWallpaperZoomState] = useState(() => readNum("reclaim-wallpaper-zoom", DEFAULT_WALLPAPER_ZOOM));
+  const [wallpaperPosX, setWallpaperPosXState] = useState(() => readNum("reclaim-wallpaper-posx", DEFAULT_WALLPAPER_POS_X));
+  const [wallpaperPosY, setWallpaperPosYState] = useState(() => readNum("reclaim-wallpaper-posy", DEFAULT_WALLPAPER_POS_Y));
   const [streakId, setStreakId] = useState(null);
+
+  const persistCrop = useCallback((zoom, posX, posY) => {
+    localStorage.setItem("reclaim-wallpaper-zoom", String(zoom));
+    localStorage.setItem("reclaim-wallpaper-posx", String(posX));
+    localStorage.setItem("reclaim-wallpaper-posy", String(posY));
+    if (streakId) {
+      db.entities.Streak.update(streakId, {
+        wallpaper_zoom: zoom,
+        wallpaper_pos_x: posX,
+        wallpaper_pos_y: posY,
+      }).catch((e) => console.error(e));
+    }
+  }, [streakId]);
 
   // Dark mode only — always apply the dark class
   useEffect(() => {
@@ -223,6 +249,18 @@ export function ThemeProvider({ children }) {
             localStorage.setItem("reclaim-video-wallpaper", "1");
           }
         }
+        if (s.wallpaper_zoom != null) {
+          setWallpaperZoomState(Number(s.wallpaper_zoom));
+          localStorage.setItem("reclaim-wallpaper-zoom", String(s.wallpaper_zoom));
+        }
+        if (s.wallpaper_pos_x != null) {
+          setWallpaperPosXState(Number(s.wallpaper_pos_x));
+          localStorage.setItem("reclaim-wallpaper-posx", String(s.wallpaper_pos_x));
+        }
+        if (s.wallpaper_pos_y != null) {
+          setWallpaperPosYState(Number(s.wallpaper_pos_y));
+          localStorage.setItem("reclaim-wallpaper-posy", String(s.wallpaper_pos_y));
+        }
       } catch (e) {
         console.error(e);
       }
@@ -257,6 +295,10 @@ export function ThemeProvider({ children }) {
     await setWallpaper(DEFAULT_WALLPAPER);
     setWallpaperBlurState(DEFAULT_BLUR);
     localStorage.setItem("reclaim-blur", String(DEFAULT_BLUR));
+    setWallpaperZoomState(DEFAULT_WALLPAPER_ZOOM);
+    setWallpaperPosXState(DEFAULT_WALLPAPER_POS_X);
+    setWallpaperPosYState(DEFAULT_WALLPAPER_POS_Y);
+    persistCrop(DEFAULT_WALLPAPER_ZOOM, DEFAULT_WALLPAPER_POS_X, DEFAULT_WALLPAPER_POS_Y);
     if (streakId) {
       try {
         await db.entities.Streak.update(streakId, { wallpaper_blur: DEFAULT_BLUR });
@@ -264,7 +306,7 @@ export function ThemeProvider({ children }) {
         console.error(e);
       }
     }
-  }, [setWallpaper, streakId]);
+  }, [setWallpaper, streakId, persistCrop]);
 
   const setVideoWallpaper = useCallback(async (dataUrl) => {
     if (!dataUrl) {
@@ -312,13 +354,92 @@ export function ThemeProvider({ children }) {
     }
   }, []);
 
+  const setWallpaperZoom = useCallback((zoom) => {
+    const z = Math.max(1, Math.min(3, Number(zoom) || 1));
+    setWallpaperZoomState(z);
+    persistCrop(z, wallpaperPosX, wallpaperPosY);
+  }, [wallpaperPosX, wallpaperPosY, persistCrop]);
+
+  const setWallpaperPosX = useCallback((x) => {
+    const v = Math.max(0, Math.min(100, Number(x) || 0));
+    setWallpaperPosXState(v);
+    persistCrop(wallpaperZoom, v, wallpaperPosY);
+  }, [wallpaperZoom, wallpaperPosY, persistCrop]);
+
+  const setWallpaperPosY = useCallback((y) => {
+    const v = Math.max(0, Math.min(100, Number(y) || 0));
+    setWallpaperPosYState(v);
+    persistCrop(wallpaperZoom, wallpaperPosX, v);
+  }, [wallpaperZoom, wallpaperPosX, persistCrop]);
+
+  const resetCrop = useCallback(() => {
+    setWallpaperZoomState(DEFAULT_WALLPAPER_ZOOM);
+    setWallpaperPosXState(DEFAULT_WALLPAPER_POS_X);
+    setWallpaperPosYState(DEFAULT_WALLPAPER_POS_Y);
+    persistCrop(DEFAULT_WALLPAPER_ZOOM, DEFAULT_WALLPAPER_POS_X, DEFAULT_WALLPAPER_POS_Y);
+  }, [persistCrop]);
+
+  // Unified "upload wallpaper" — accepts an image OR video file and uses
+  // whichever was chosen (replacing the other), so there's a single upload.
+  const uploadWallpaper = useCallback(async (file) => {
+    if (!file) return { type: null };
+    const isVideo = file.type?.startsWith("video/") || /\.(mp4|webm|mov|m4v|ogv)$/i.test(file.name || "");
+    if (isVideo) {
+      if (file.size > 50 * 1024 * 1024) {
+        throw new Error("Please use a video under 50 MB.");
+      }
+      const dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => reject(fr.error);
+        fr.readAsDataURL(file);
+      });
+      // A video replaces any image wallpaper
+      localStorage.removeItem("reclaim-wallpaper");
+      setWallpaperUrlState(DEFAULT_WALLPAPER);
+      if (streakId) {
+        try {
+          await db.entities.Streak.update(streakId, { wallpaper_url: null });
+        } catch (e) { console.error(e); }
+      }
+      await setVideoWallpaper(dataUrl);
+      return { type: "video", url: dataUrl };
+    }
+    // Image — replace any video wallpaper
+    await clearVideoWallpaper();
+    setVideoWallpaperUrlState(null);
+    localStorage.removeItem("reclaim-video-wallpaper");
+    if (streakId) {
+      try {
+        await db.entities.Streak.update(streakId, { video_wallpaper_url: null });
+      } catch (e) { console.error(e); }
+    }
+    const { file_url } = await db.integrations.Core.UploadFile({ file });
+    await setWallpaper(file_url);
+    return { type: "image", url: file_url };
+  }, [streakId, setVideoWallpaper, setWallpaper]);
+
+  const removeWallpaper = useCallback(async () => {
+    await setVideoWallpaper(null);
+    resetWallpaper();
+  }, [setVideoWallpaper, resetWallpaper]);
+
+  const hasCustom = !!localStorage.getItem("reclaim-wallpaper") || !!localStorage.getItem("reclaim-video-wallpaper");
+  const isVideoCustom = !!videoWallpaperUrl;
+
   return (
     <ThemeContext.Provider value={{
       wallpaperUrl, setWallpaper, resetWallpaper,
       wallpaperBlur, setBlur,
       themeColor, setThemeColor,
       videoWallpaperUrl, setVideoWallpaper,
-      hasCustomWallpaper: !!localStorage.getItem("reclaim-wallpaper"),
+      wallpaperZoom, setWallpaperZoom,
+      wallpaperPosX, setWallpaperPosX,
+      wallpaperPosY, setWallpaperPosY,
+      resetCrop,
+      uploadWallpaper, removeWallpaper,
+      isVideoCustom,
+      hasCustomWallpaper: hasCustom,
     }}>
       {children}
     </ThemeContext.Provider>
@@ -338,6 +459,16 @@ export function useTheme() {
       setThemeColor: () => {},
       videoWallpaperUrl: null,
       setVideoWallpaper: () => {},
+      wallpaperZoom: DEFAULT_WALLPAPER_ZOOM,
+      setWallpaperZoom: () => {},
+      wallpaperPosX: DEFAULT_WALLPAPER_POS_X,
+      setWallpaperPosX: () => {},
+      wallpaperPosY: DEFAULT_WALLPAPER_POS_Y,
+      setWallpaperPosY: () => {},
+      resetCrop: () => {},
+      uploadWallpaper: () => {},
+      removeWallpaper: () => {},
+      isVideoCustom: false,
       hasCustomWallpaper: false,
     };
   }
