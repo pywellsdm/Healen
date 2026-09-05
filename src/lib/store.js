@@ -598,6 +598,37 @@ export const ai = {
     );
     return true;
   },
+  async clearChats() {
+    const username = currentUsername();
+    write(`${PREFIX}:chats:${username}`, []);
+    return true;
+  },
+  async getChars() {
+    const username = currentUsername();
+    const chars = read(`${PREFIX}:chars:${username}`, []);
+    return Array.isArray(chars) ? chars : [];
+  },
+  async saveChar(char) {
+    const username = currentUsername();
+    const chars = await this.getChars();
+    const index = chars.findIndex((c) => c.id === char.id);
+    if (index >= 0) chars[index] = char;
+    else chars.push(char);
+    chars.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    write(`${PREFIX}:chars:${username}`, chars);
+    return char;
+  },
+  async deleteChar(id) {
+    const username = currentUsername();
+    const chars = await this.getChars();
+    write(`${PREFIX}:chars:${username}`, chars.filter((c) => c.id !== id));
+    return true;
+  },
+  async clearChars() {
+    const username = currentUsername();
+    write(`${PREFIX}:chars:${username}`, []);
+    return true;
+  },
   async chat(cfg, { messages }) {
     if (cfg.provider === "local" || !cfg.apiKey) return localCoachReply(messages);
     return chatRequest(cfg, messages);

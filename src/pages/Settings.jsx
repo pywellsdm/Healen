@@ -14,6 +14,7 @@ import {
   Palette, Image, Bot, Upload, Copy, Check,
   Wifi, WifiOff, Download, ArchiveRestore, FileUp, Bitcoin, Wallet,
   AlarmClock, Volume2, Music, Crop, Move, RotateCcw,
+  Moon, Plus, Pencil, Camera,
 } from "lucide-react";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,13 @@ const TONES = [
 ];
 
 const GOALS = [7, 14, 30, 45, 60, 90, 180, 365];
+
+const TABS = [
+  { key: "ai", label: "AI", icon: Bot },
+  { key: "customize", label: "Customization", icon: Palette },
+  { key: "reminders", label: "Reminders & Alarm", icon: AlarmClock },
+  { key: "data", label: "Backup & Data", icon: ArchiveRestore },
+];
 
 // Convert a stored hue (0–360) into a hex value for the <input type="color">.
 function hslToHex(hue) {
@@ -69,15 +77,18 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [aiPersona, setAiPersona] = useState("mentor");
-  const [customPrompt, setCustomPrompt] = useState("");
   const fileRef = useRef(null);
   const restoreRef = useRef(null);
   const dragRef = useRef(null);
+  const charFileRef = useRef(null);
   const [backupCode, setBackupCode] = useState("");
   const [restoreCode, setRestoreCode] = useState("");
   const [backupMsg, setBackupMsg] = useState("");
   const [restoreMsg, setRestoreMsg] = useState("");
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState("ai");
+  const [characters, setCharacters] = useState([]);
+  const [charForm, setCharForm] = useState(null);
 
   // AI provider form state
   const [aiConfig, setAiConfig] = useState({ provider: "local", apiKey: "", baseUrl: "", model: "" });
@@ -91,6 +102,7 @@ export default function Settings() {
   const [name, setName] = useState("");
   const [tone, setTone] = useState("gentle");
   const [goal, setGoal] = useState(30);
+  const [sleepGoal, setSleepGoal] = useState(30);
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState("09:00");
   const [customMotivation, setCustomMotivation] = useState("");
@@ -198,14 +210,15 @@ export default function Settings() {
         setName(s.user_name || "");
         setTone(s.motivation_tone || "gentle");
         setGoal(s.current_goal_days || 30);
+        setSleepGoal(s.sleep_goal_days || 30);
         setReminderEnabled(s.daily_reminder_enabled ?? false);
         setReminderTime(s.daily_reminder_time || "09:00");
         setCustomMotivation(s.custom_motivation || "");
         setAiPersona(s.ai_persona || "mentor");
-        setCustomPrompt(s.custom_persona_prompt || "");
         setNotifState("Notification" in window ? Notification.permission : "denied");
-        const cfg = await db.ai.getConfig();
+        const [cfg, chars] = await Promise.all([db.ai.getConfig(), db.ai.getChars()]);
         setAiConfig(cfg);
+        setCharacters(chars);
         setHasCustomAudio(await hasCustomAudioStored());
       } catch (e) {
         console.error(e);
@@ -280,6 +293,90 @@ export default function Settings() {
     }
   };
 
+  const sanitizePersona = (p) => {
+    if (AI_PERSONAS[p]) return p;
+    if (characters.some((c) => `char:${c.id}` === p)) return p;
+    return "mentor";
+  };
+  const activePersona = sanitizePersona(aiPersona);
+
+  const selectCharPersona = async (c) => {
+    const p = `char:${c.id}`;
+    setAiPersona(p);
+    try {
+      const s = await ensureStreakRecord();
+      await db.entities.Streak.update(s.id, { ai_persona: p });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const saveChar = async () => {
+    if (!charForm || !charForm.name.trim()) return;
+    const now = new Date().toISOString();
+    const char = {
+      id: charForm.id || `char_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      name: charForm.name.trim(),
+      persona: (charForm.persona || "").trim(),
+      avatar: charForm.avatar || null,
+      createdAt: charForm.createdAt || now,
+      updatedAt: now,
+    };
+    try {
+      await db.ai.saveChar(char);
+      setCharacters(await db.ai.getChars());
+      setCharForm(null);
+      toast({ title: charForm.id ? "Character updated" : "Character created", description: `"${char.name}" is ready in your AI coach.` });
+    } catch (err) {
+      toast({ title: "Could not save character", description: err?.message, variant: "destructive" });
+    }
+  };
+
+  const deleteChar = async (c) => {
+    if (!confirm(`Delete "${c.name}"? This can't be undone.`)) return;
+    try {
+      await db.ai.deleteChar(c.id);
+      setCharacters(await db.ai.getChars());
+      if (aiPersona === `char:${c.id}`) {
+        setAiPersona("mentor");
+        const s = await ensureStreakRecord();
+        await db.entities.Streak.update(s.id, { ai_persona: "mentor" });
+      }
+      toast({ title: "Character deleted", description: `"${c.name}" was removed.` });
+    } catch (e) {
+      toast({ title: "Could not delete character", description: e?.message, variant: "destructive" });
+    }
+  };
+
+  const handleCharAvatar = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      toast({ title: "Image too large", description: "Please use an image under 4 MB.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const size = 256;
+        const scale = Math.min(1, size / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.width * scale));
+        c.height = Math.max(1, Math.round(img.height * scale));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        const dataUrl = c.toDataURL("image/jpeg", 0.82);
+        setCharForm((f) => (f ? { ...f, avatar: dataUrl } : f));
+      };
+      img.onerror = () => toast({ title: "Could not read image", description: "That file doesn't look like a picture.", variant: "destructive" });
+      const src = typeof reader.result === "string" ? reader.result : "";
+      if (!src) return;
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Auto-save: settings persist automatically as you change them
   const hydratedRef = useRef(false);
   useEffect(() => {
@@ -293,13 +390,14 @@ export default function Settings() {
         user_name: name,
         motivation_tone: tone,
         current_goal_days: goal,
+        sleep_goal_days: sleepGoal,
         daily_reminder_enabled: reminderEnabled,
         daily_reminder_time: reminderTime,
         custom_motivation: customMotivation,
       });
     }, 400);
     return () => clearTimeout(t);
-  }, [name, tone, goal, reminderEnabled, reminderTime, customMotivation]);
+  }, [name, tone, goal, sleepGoal, reminderEnabled, reminderTime, customMotivation]);
 
   if (loading) {
     return (
@@ -312,8 +410,33 @@ export default function Settings() {
   return (
     <div className="px-5 pt-12 pb-4">
       <h1 className="text-xl font-bold text-white light:text-slate-800 mb-1">Settings</h1>
-      <p className="text-xs text-slate-500 mb-6">Make this app yours. Customize everything.</p>
+      <p className="text-xs text-slate-500 mb-4">Make this app yours. Customize everything.</p>
 
+      {/* Tab bar */}
+      <div className="flex gap-1.5 overflow-x-auto pb-3 mb-3 -mx-5 px-5 scrollbar-hide">
+        {TABS.map((t) => {
+          const Ic = t.icon;
+          return (
+            <button
+              key={t.key}
+              onClick={() => {
+                setTab(t.key);
+              }}
+              className={cn(
+                "shrink-0 px-3.5 py-2 rounded-full text-xs font-medium border flex items-center gap-1.5 transition-all",
+                tab === t.key
+                  ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-200"
+                  : "bg-white/5 border-white/5 text-slate-400"
+              )}
+            >
+              <Ic className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "ai" && (<>
       {/* AI Provider */}
       <Section icon={Bot} title="AI Provider">
         <p className="text-xs text-slate-400 mb-3 leading-relaxed">
@@ -432,6 +555,187 @@ export default function Settings() {
           </p>
         )}
       </Section>
+
+      {/* AI Coach Persona */}
+      <Section icon={Bot} title="AI Coach Persona">
+        <p className="text-xs text-slate-400 mb-3">Choose how your AI coach talks to you</p>
+        <div className="space-y-2">
+          {Object.entries(AI_PERSONAS).map(([key, p]) => (
+            <button
+              key={key}
+              onClick={async () => {
+                setAiPersona(key);
+                try {
+                  const s = await ensureStreakRecord();
+                  await db.entities.Streak.update(s.id, { ai_persona: key });
+                } catch (e) { console.error(e); }
+              }}
+              className={cn(
+                "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left",
+                activePersona === key ? "bg-indigo-500/15 border-indigo-400/40" : "bg-white/5 border-white/5"
+              )}
+            >
+              <div>
+                <p className={cn("text-sm font-medium", activePersona === key ? "text-indigo-200" : "text-slate-300")}>{p.name}</p>
+                <p className="text-[11px] text-slate-500">{p.desc}</p>
+              </div>
+              <div className={cn(
+                "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+                activePersona === key ? "border-indigo-400 bg-indigo-500/30" : "border-white/20"
+              )}>
+                {activePersona === key && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Your Own Characters — replaces the old Custom persona */}
+        <div className="mt-5 pt-4 border-t border-white/10">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs font-semibold text-slate-300">Your Own Characters</p>
+            <button
+              onClick={() => setCharForm({ id: null, name: "", persona: "", avatar: null })}
+              className="text-[11px] text-indigo-300 flex items-center gap-1 hover:text-indigo-200"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add character
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+            Build your own AI characters — a name, a personality prompt, and a profile
+            picture. They appear in the AI coach under "Characters".
+          </p>
+
+          {characters.length === 0 && (
+            <p className="text-[11px] text-slate-500 bg-white/5 rounded-xl px-3 py-2.5">
+              No characters yet. Tap "Add character" to create your first one.
+            </p>
+          )}
+
+          <div className="space-y-2">
+            {characters.map((c) => {
+              const active = `char:${c.id}` === activePersona;
+              return (
+                <div
+                  key={c.id}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border px-3 py-2.5",
+                    active ? "bg-indigo-500/10 border-indigo-400/30" : "bg-white/5 border-white/5"
+                  )}
+                >
+                  {c.avatar ? (
+                    <img src={c.avatar} alt={c.name} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center shrink-0">
+                      <Bot className="w-4 h-4 text-indigo-300" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{c.name}</p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {c.persona ? c.persona.replace(/\s+/g, " ").trim() : "No personality prompt yet"}
+                    </p>
+                    {active && <p className="text-[9px] text-indigo-300 mt-0.5">Active in AI coach</p>}
+                  </div>
+                  <button
+                    onClick={() => deleteChar(c)}
+                    className="w-8 h-8 rounded-full text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center shrink-0"
+                    aria-label={`Delete ${c.name}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setCharForm(c)}
+                    className="w-8 h-8 rounded-full text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/10 flex items-center justify-center shrink-0"
+                    aria-label={`Edit ${c.name}`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => selectCharPersona(c)}
+                    className={cn(
+                      "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                      active ? "border-indigo-400 bg-indigo-500/30" : "border-white/20"
+                    )}
+                    aria-label={`Use ${c.name} in AI coach`}
+                  >
+                    {active && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {charForm && (
+            <div className="mt-3 rounded-xl bg-black/20 border border-white/10 p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                {charForm.avatar ? (
+                  <img src={charForm.avatar} alt="" className="w-11 h-11 rounded-full object-cover border border-white/10" />
+                ) : (
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center shrink-0">
+                    <Bot className="w-4 h-4 text-indigo-300" />
+                  </div>
+                )}
+                <button
+                  onClick={() => charFileRef.current?.click()}
+                  className="text-[11px] text-indigo-300 flex items-center gap-1 hover:text-indigo-200"
+                >
+                  <Camera className="w-3.5 h-3.5" /> {charForm.avatar ? "Change photo" : "Add photo"}
+                </button>
+                {charForm.avatar && (
+                  <button onClick={() => setCharForm((f) => (f ? { ...f, avatar: null } : f))} className="text-[11px] text-slate-500 hover:text-slate-400">
+                    Remove
+                  </button>
+                )}
+                <input
+                  ref={charFileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleCharAvatar}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block">Character name</label>
+                <input
+                  value={charForm.name}
+                  onChange={(e) => setCharForm((f) => (f ? { ...f, name: e.target.value } : f))}
+                  placeholder="e.g. Nazuna Nanakusa"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-400/50"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block">Personality prompt</label>
+                <textarea
+                  value={charForm.persona}
+                  onChange={(e) => setCharForm((f) => (f ? { ...f, persona: e.target.value } : f))}
+                  placeholder={'Describe who they are and how they coach you. Example: "You are Nazuna Nanakusa from Call of the Night. Lay-back, playful, a bit teasing, but deeply caring about helping me quit gooning. Stay in character with a relaxed, anime-girl tone."'}
+                  className="w-full h-28 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-indigo-400/50"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Your AI will fully role-play this personality while coaching you.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveChar}
+                  disabled={!charForm.name.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-xs font-medium hover:bg-indigo-500/30 transition-colors disabled:opacity-50"
+                >
+                  {charForm.id ? "Save changes" : "Add character"}
+                </button>
+                <button
+                  onClick={() => setCharForm(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Section>
+      </>)}
+      {tab === "customize" && (<>
 
       {/* Appearance */}
       <Section icon={Palette} title="Appearance">
@@ -601,91 +905,52 @@ export default function Settings() {
         <div className="mt-4">
           <div className="flex justify-between items-center mb-2">
             <label className="text-xs text-slate-400 flex items-center gap-1"><Palette className="w-3 h-3" /> Theme color</label>
-            <span className="text-[10px] text-slate-500">Auto uses your wallpaper</span>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setThemeColor("auto")}
+            <label
+              title="Tap to pick a custom theme color"
               className={cn(
-                "flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-medium transition-all",
-                themeColor === "auto" ? "bg-indigo-500/15 border-indigo-400/40 text-indigo-200" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                "relative w-12 h-12 rounded-full border-2 overflow-hidden cursor-pointer shrink-0 transition-colors",
+                themeColor === "auto" ? "border-white/20" : "border-indigo-400/70"
               )}
             >
-              <Sparkles className="w-3.5 h-3.5" /> Auto
-            </button>
-            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span
+                className="absolute inset-0"
+                style={{ background: themeColor === "auto" ? "#6366f1" : hslToHex(themeColor) }}
+              />
+              {themeColor === "auto" && (
+                <span className="absolute inset-0 bg-black/45 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white/80" />
+                </span>
+              )}
               <input
                 type="color"
                 value={themeColor === "auto" ? "#6366f1" : hslToHex(themeColor)}
                 onChange={(e) => setThemeColor(hueFromHex(e.target.value))}
                 aria-label="Pick a custom theme color"
-                className="w-10 h-10 rounded-xl border border-white/20 bg-transparent p-0.5 cursor-pointer shrink-0"
+                className="absolute inset-0 opacity-0 cursor-pointer"
               />
-              <p className="text-[11px] text-slate-500 truncate">
-                {themeColor === "auto" ? "Pick any color you like" : `Custom — hue ${themeColor}°`}
-              </p>
+            </label>
+            <div className="flex-1 min-w-0">
+              <button
+                onClick={() => setThemeColor("auto")}
+                className={cn(
+                  "px-3 py-2 rounded-xl border text-xs font-medium transition-all",
+                  themeColor === "auto"
+                    ? "bg-indigo-500/15 border-indigo-400/40 text-indigo-200"
+                    : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                )}
+              >
+                <Sparkles className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" /> Auto (match wallpaper)
+              </button>
             </div>
           </div>
+          <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+            {themeColor === "auto"
+              ? "Auto — your accent color matches your wallpaper. Tap the color circle to pick a custom color instead."
+              : `Custom color set (hue ${themeColor}°). Tap the circle to change it, or switch back to Auto to match your wallpaper.`}
+          </p>
         </div>
-      </Section>
-
-      {/* AI Coach Persona */}
-      <Section icon={Bot} title="AI Coach Persona">
-        <p className="text-xs text-slate-400 mb-3">Choose how your AI coach talks to you</p>
-        <div className="space-y-2">
-          {Object.entries(AI_PERSONAS).map(([key, p]) => (
-            <button
-              key={key}
-              onClick={async () => {
-                setAiPersona(key);
-                try {
-                  const s = await ensureStreakRecord();
-                  await db.entities.Streak.update(s.id, { ai_persona: key });
-                } catch (e) { console.error(e); }
-              }}
-              className={cn(
-                "w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left",
-                aiPersona === key ? "bg-indigo-500/15 border-indigo-400/40" : "bg-white/5 border-white/5"
-              )}
-            >
-              <div>
-                <p className={cn("text-sm font-medium", aiPersona === key ? "text-indigo-200" : "text-slate-300")}>{p.name}</p>
-                <p className="text-[11px] text-slate-500">{p.desc}</p>
-              </div>
-              <div className={cn(
-                "w-5 h-5 rounded-full border-2 flex items-center justify-center",
-                aiPersona === key ? "border-indigo-400 bg-indigo-500/30" : "border-white/20"
-              )}>
-                {aiPersona === key && <div className="w-2 h-2 rounded-full bg-indigo-300" />}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {aiPersona === "custom" && (
-          <div className="mt-3">
-            <label className="text-xs text-slate-400 mb-1.5 block">
-              Personality prompt
-            </label>
-            <textarea
-              value={customPrompt}
-              onChange={(e) => {
-                setCustomPrompt(e.target.value);
-                (async () => {
-                  try {
-                    const s = await ensureStreakRecord();
-                    await db.entities.Streak.update(s.id, { custom_persona_prompt: e.target.value });
-                  } catch (err) { console.error(err); }
-                })();
-              }}
-              placeholder={'Describe your AI. Example: "You are Nazuna Nanakusa from Call of the Night. You are laid-back, playful, and a bit teasing, but deeply caring about helping me quit gooning. Stay in character with a relaxed, anime-girl tone."'}
-              className="w-full h-32 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-indigo-400/50"
-            />
-            <p className="text-[10px] text-slate-500 mt-1">
-              Your AI will fully role-play this personality while coaching you.
-            </p>
-          </div>
-        )}
       </Section>
 
       {/* Profile */}
@@ -701,8 +966,8 @@ export default function Settings() {
         </div>
       </Section>
 
-      {/* Goal */}
-      <Section icon={Target} title="Your Goal">
+      {/* No Goon Goal */}
+      <Section icon={Target} title="No Goon Goal">
         <p className="text-xs text-slate-400 mb-3">What streak are you working toward?</p>
         <div className="grid grid-cols-4 gap-2">
           {GOALS.map((g) => (
@@ -722,6 +987,31 @@ export default function Settings() {
         </div>
         <p className="text-[11px] text-slate-500 mt-2">
           {goal === 90 ? "🎯 90 days — the full brain rewiring milestone." : goal === 30 ? "Survive the hardest month." : `${goal} days of mastery.`}
+        </p>
+      </Section>
+
+      {/* Sleep Goal */}
+      <Section icon={Moon} title="Sleep Goal">
+        <p className="text-xs text-slate-400 mb-1">How many nights of healthy sleep are you working toward?</p>
+        <p className="text-[11px] text-slate-500 mb-3">Your bedtime streak counts one night each time you get 7–10 hours of rest.</p>
+        <div className="grid grid-cols-4 gap-2">
+          {GOALS.map((g) => (
+            <button
+              key={g}
+              onClick={() => setSleepGoal(g)}
+              className={cn(
+                "py-2.5 rounded-xl text-sm font-bold border transition-all",
+                sleepGoal === g
+                  ? "bg-indigo-500/20 border-indigo-400/50 text-indigo-200"
+                  : "bg-white/5 border-white/5 text-slate-400"
+              )}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">
+          {sleepGoal === 90 ? "🎯 90 nights — deep, lasting sleep habits." : sleepGoal === 30 ? "Build a month of healthy nights." : `${sleepGoal} nights of healthy sleep.`}
         </p>
       </Section>
 
@@ -767,6 +1057,9 @@ export default function Settings() {
           className="w-full h-20 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-indigo-400/50"
         />
       </Section>
+
+      </>)}
+      {tab === "reminders" && (<>
 
       {/* Notifications */}
       <Section icon={Bell} title="Daily Reminder">
@@ -1050,6 +1343,9 @@ export default function Settings() {
         </p>
       </Section>
 
+      </>)}
+      {tab === "data" && (<>
+
       {/* Backup & Restore */}
       <Section icon={ArchiveRestore} title="Backup & Restore">
         <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
@@ -1202,6 +1498,9 @@ export default function Settings() {
               await db.entities.CheckIn.deleteMany({});
               await db.entities.Relapse.deleteMany({});
               await db.entities.Sleep.deleteMany({});
+              await db.ai.clearChats();
+              await db.ai.clearChars();
+              setCharacters([]);
               await db.entities.Streak.update(streak.id, {
                 current_streak_days: 0,
                 longest_streak_days: 0,
@@ -1233,6 +1532,8 @@ export default function Settings() {
           <p className="text-[11px] text-emerald-400/80 mt-2 text-center">{resetMsg}</p>
         )}
       </div>
+
+      </>)}
 
       {/* Support */}
       <Section icon={Heart} title="Support the Project">

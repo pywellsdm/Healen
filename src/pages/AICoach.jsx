@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, AI_PROVIDERS } from "@/lib/store";
-import { buildAIContext, buildChatMemory, AI_PERSONAS, SLEEP_PLAN_LABELS } from "@/lib/aiContext";
+import { buildAIContext, buildChatMemory, buildTimeAwareness, resolvePersona, AI_PERSONAS, SLEEP_PLAN_LABELS } from "@/lib/aiContext";
 import { ensureStreakRecord, calculateStreakDays } from "@/lib/streakUtils";
 import {
   Bot,
@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Settings,
   Brain,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -70,13 +71,20 @@ export default function AICoach() {
   const [streak, setStreak] = useState(null);
   const [alarmInfo, setAlarmInfo] = useState(null);
   const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [characters, setCharacters] = useState([]);
+  const [charPickerOpen, setCharPickerOpen] = useState(false);
+  const [stickToBottom, setStickToBottom] = useState(true);
   const scrollRef = useRef(null);
   const chatsRef = useRef([]);
+
+  const isCharPersona = typeof persona === "string" && persona.startsWith("char:");
+  const activeChar = isCharPersona ? characters.find((c) => `char:${c.id}` === persona) : null;
+  const personaInfo = resolvePersona(persona, characters);
 
   useEffect(() => {
     (async () => {
       try {
-        const [cfg, savedChats] = await Promise.all([db.ai.getConfig(), db.ai.getChats()]);
+        const [cfg, savedChats, chars] = await Promise.all([db.ai.getConfig(), db.ai.getChats(), db.ai.getChars()]);
         const ctx = await buildAIContext();
         const savedPersona = ctx.streak.ai_persona || "mentor";
         setConfig(cfg);
@@ -84,6 +92,7 @@ export default function AICoach() {
         setStreak(ctx.streak);
         setAlarmInfo(ctx.alarm);
         setPersona(savedPersona);
+        setCharacters(chars);
         chatsRef.current = savedChats;
         setChats(savedChats);
         if (savedChats.length) {
@@ -101,8 +110,15 @@ export default function AICoach() {
   }, []);
 
   useEffect(() => {
+    if (!stickToBottom) return;
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, historyOpen]);
+  }, [messages, loading, historyOpen, stickToBottom]);
+
+  const onChatScroll = (e) => {
+    const el = e.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setStickToBottom(nearBottom);
+  };
 
   const persist = async (chatId, msgs, personaName, provider) => {
     try {
@@ -146,15 +162,13 @@ export default function AICoach() {
     const userMsg = { role: "user", content: text.trim(), createdAt: new Date().toISOString() };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
+    setStickToBottom(true);
     setInput("");
     setLoading(true);
 
-    const personaConfig = AI_PERSONAS[persona];
-    const customPrompt = streak?.custom_persona_prompt;
-    let sys =
-      persona === "custom"
-        ? `${customPrompt || "You are a supportive recovery companion helping with quitting porn and gooning. Stay fully in character, be warm and encouraging, and reference the user's data."}\n\n${context}`
-        : `${personaConfig.system}\n\n${context}`;
+    const personaConfig = resolvePersona(persona, characters);
+    const timeNote = buildTimeAwareness(nextMessages);
+    let sys = `${personaConfig.system}\n\n${context}\n\n${timeNote}`;
 
     // Long-term memory: this chat can see the user's past conversations.
     if (memoryEnabled) {
@@ -230,6 +244,7 @@ export default function AICoach() {
     setMessages([]);
     setMemoryEnabled(true);
     setHistoryOpen(false);
+    setStickToBottom(true);
   };
 
   const openChat = (c) => {
@@ -238,6 +253,7 @@ export default function AICoach() {
     setMemoryEnabled(c.memory !== false);
     if (c.persona) setPersona(c.persona);
     setHistoryOpen(false);
+    setStickToBottom(true);
   };
 
   const deleteChat = async (id) => {
@@ -315,7 +331,7 @@ export default function AICoach() {
               onClick={() => changePersona(key)}
               className={cn(
                 "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                persona === key
+                !isCharPersona && persona === key
                   ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-200"
                   : "bg-white/5 border-white/5 text-slate-400"
               )}
@@ -323,6 +339,22 @@ export default function AICoach() {
               {p.name}
             </button>
           ))}
+          <button
+            onClick={() => setCharPickerOpen(true)}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all flex items-center gap-1.5",
+              isCharPersona
+                ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-200"
+                : "bg-white/5 border-white/5 text-slate-400"
+            )}
+          >
+            {activeChar?.avatar ? (
+              <img src={activeChar.avatar} alt="" className="w-4 h-4 rounded-full object-cover" />
+            ) : (
+              <Bot className="w-3.5 h-3.5" />
+            )}
+            {activeChar ? activeChar.name : "Characters"}
+          </button>
         </div>
       )}
 
@@ -401,14 +433,18 @@ export default function AICoach() {
           </div>
 
           <div className="flex flex-col items-center text-center pt-6 pb-2">
-            <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center mb-3">
-              <Bot className="w-8 h-8 text-indigo-300" />
-            </div>
+            {personaInfo.avatar ? (
+              <img src={personaInfo.avatar} alt="" className="w-16 h-16 rounded-3xl object-cover border border-white/10 mb-3" />
+            ) : (
+              <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center mb-3">
+                <Bot className="w-8 h-8 text-indigo-300" />
+              </div>
+            )}
             <h2 className="text-lg font-bold text-white">
               Hey {streak?.user_name || "friend"} 👋
             </h2>
             <p className="text-sm text-slate-400 mt-1 max-w-xs">
-              I'm your {AI_PERSONAS[persona].name}. I can see you're at{" "}
+              I'm your {personaInfo.name}. I can see you're at{" "}
               <span className="text-indigo-300 font-medium">
                 {aiCurrentDays} days clean
               </span>{" "}
@@ -471,26 +507,30 @@ export default function AICoach() {
         </div>
       ) : (
         /* Messages */
-        <div className="flex-1 overflow-y-auto space-y-3 mb-3 -mx-5 px-5">
+        <div className="flex-1 overflow-y-auto space-y-3 mb-3 -mx-5 px-5" onScroll={onChatScroll}>
           {messages.map((msg, i) => (
             <div
               key={i}
               className={cn("flex gap-2.5", msg.role === "user" && "flex-row-reverse")}
             >
-              <div
-                className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center shrink-0 border",
-                  msg.role === "assistant"
-                    ? "bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border-indigo-400/20"
-                    : "bg-white/5 border-white/10"
-                )}
-              >
-                {msg.role === "assistant" ? (
-                  <Bot className="w-4 h-4 text-indigo-300" />
-                ) : (
-                  <User className="w-4 h-4 text-slate-400" />
-                )}
-              </div>
+              {msg.role === "assistant" && personaInfo.avatar ? (
+                <img src={personaInfo.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0" />
+              ) : (
+                <div
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center shrink-0 border",
+                    msg.role === "assistant"
+                      ? "bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border-indigo-400/20"
+                      : "bg-white/5 border-white/10"
+                  )}
+                >
+                  {msg.role === "assistant" ? (
+                    <Bot className="w-4 h-4 text-indigo-300" />
+                  ) : (
+                    <User className="w-4 h-4 text-slate-400" />
+                  )}
+                </div>
+              )}
               <div
                 className={cn(
                   "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words",
@@ -549,6 +589,94 @@ export default function AICoach() {
             >
               <Send className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Your Characters picker */}
+      {charPickerOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setCharPickerOpen(false)} />
+          <div className="absolute left-0 right-0 bottom-0 max-h-[75dvh] rounded-t-3xl glass-strong px-5 pt-4 pb-8 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white">Your Characters</h3>
+                <p className="text-[11px] text-slate-500">
+                  Pick who coaches you. Create more in Settings.
+                </p>
+              </div>
+              <button
+                onClick={() => setCharPickerOpen(false)}
+                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 text-slate-300 flex items-center justify-center"
+                aria-label="Close characters"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {characters.length === 0 && (
+              <div className="text-center py-8">
+                <Bot className="w-9 h-9 text-slate-600 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">No characters yet.</p>
+                <button
+                  onClick={() => {
+                    setCharPickerOpen(false);
+                    navigate("/settings");
+                  }}
+                  className="mt-3 px-4 py-2 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-xs font-medium"
+                >
+                  Create one in Settings
+                </button>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {characters.map((c) => {
+                const active = `char:${c.id}` === persona;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      changePersona(`char:${c.id}`);
+                      setCharPickerOpen(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors",
+                      active
+                        ? "bg-indigo-500/15 border-indigo-400/40"
+                        : "bg-white/5 border-white/10 hover:bg-white/10"
+                    )}
+                  >
+                    {c.avatar ? (
+                      <img src={c.avatar} alt="" className="w-11 h-11 rounded-full object-cover border border-white/10 shrink-0" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500/30 to-purple-500/20 border border-indigo-400/20 flex items-center justify-center shrink-0">
+                        <Bot className="w-5 h-5 text-indigo-300" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{c.name}</p>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {c.persona ? c.persona.replace(/\s+/g, " ").trim() : "No personality prompt"}
+                      </p>
+                    </div>
+                    {active && <span className="shrink-0 text-[10px] text-indigo-300 font-medium">Active</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {characters.length > 0 && (
+              <button
+                onClick={() => {
+                  setCharPickerOpen(false);
+                  navigate("/settings");
+                }}
+                className="w-full mt-3 py-2.5 rounded-xl border border-dashed border-indigo-400/30 text-xs text-indigo-300 hover:bg-indigo-500/10 transition-colors"
+              >
+                + Add a new character in Settings
+              </button>
+            )}
           </div>
         </div>
       )}

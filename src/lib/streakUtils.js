@@ -29,6 +29,7 @@ export async function ensureStreakRecord() {
     total_relapses: 0,
     daily_goal_streak: 0,
     current_goal_days: 30,
+    sleep_goal_days: 30,
     motivation_tone: "gentle",
     daily_reminder_enabled: false,
     daily_reminder_time: "09:00",

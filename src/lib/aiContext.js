@@ -5,6 +5,49 @@ import { getAlarmSettings, alarmTargetMs, formatAlarmTime } from "@/lib/alarm";
 import { getNextMilestone } from "@/lib/milestones";
 import { TRIGGER_LABELS, MOOD_LABELS } from "@/lib/motivation";
 
+// Current local time ("Friday, September 5, 2026, 8:14 PM") so the AI knows
+// when the user is talking to it.
+export function formatLocalTime(ts = Date.now()) {
+  return new Date(ts).toLocaleString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// Human label for how long ago a timestamp was ("2h 5m", "3 days", "40 minutes").
+export function elapsedSinceLabel(iso) {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return null;
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
+  const hours = Math.floor(mins / 60);
+  const remMin = mins % 60;
+  if (hours < 24) return remMin ? `${hours}h ${remMin}m` : `${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.floor(hours / 24);
+  const remH = hours % 24;
+  return remH ? `${days} day${days === 1 ? "" : "s"} ${remH}h` : `${days} day${days === 1 ? "" : "s"}`;
+}
+
+// Time context for a chat: the current moment, plus how long the user was away
+// since their last message — so the AI can greet them ("welcome back" after 2h).
+export function buildTimeAwareness(messages) {
+  let text = `CURRENT LOCAL TIME (user's device): ${formatLocalTime()}`;
+  const lastUser = [...(messages || [])]
+    .reverse()
+    .find((m) => m && String(m.role) === "user" && m.createdAt);
+  const gap = lastUser ? elapsedSinceLabel(lastUser.createdAt) : null;
+  if (gap) {
+    text += `\nTime since the user's last message: ${gap}. If they returned after a noticeable gap, greet them naturally (e.g. "welcome back") and acknowledge the time that passed.`;
+  }
+  return text;
+}
+
 export const SLEEP_PLAN_LABELS = {
   under6: "under 6 hours",
   six_seven: "6–7 hours",
@@ -86,6 +129,7 @@ export async function buildAIContext() {
 - Total clean days: ${streak.total_clean_days || 0}
 - Total relapses: ${streak.total_relapses || 0}
 - Current goal: ${streak.current_goal_days || 30} days
+- Sleep goal: ${streak.sleep_goal_days || 30} nights
 - Motivation tone preference: ${streak.motivation_tone || "gentle"}
 - User name: ${streak.user_name || "friend"}
 - Gender: ${streak.gender || "not specified"}
@@ -98,6 +142,7 @@ export async function buildAIContext() {
 - Sleep resets: ${streak.sleep_total_resets || 0}
 - Sleep state: ${sleepState}
 - Daily check-in streak: ${streak.daily_goal_streak || 0}
+- Current local time: ${formatLocalTime()}
 ${alarmLine}
 ${milestoneLine}
 
@@ -110,6 +155,25 @@ ${recentRelapses.length ? recentRelapses.join("\n") : "No relapses recorded"}
 TOP TRIGGERS:
 ${topTriggers.length ? topTriggers.join(", ") : "No trigger data yet"}`,
   };
+}
+
+// Resolve the active persona to a usable config. Built-in personas use their
+// preset system prompts; `char:<id>` keys look up the user's own characters.
+export function resolvePersona(persona, characters = []) {
+  if (persona && typeof persona === "string" && persona.startsWith("char:")) {
+    const c = (characters || []).find((x) => `char:${x.id}` === persona);
+    if (c) {
+      return {
+        name: c.name || "Your character",
+        desc: (c.persona || "").split("\n")[0] || "Your own character",
+        avatar: c.avatar || null,
+        system:
+          c.persona ||
+          "You are a supportive recovery companion who coaches the user in character. Stay fully in character.",
+      };
+    }
+  }
+  return AI_PERSONAS[persona] || AI_PERSONAS.mentor;
 }
 
 export const AI_PERSONAS = {
@@ -132,10 +196,5 @@ export const AI_PERSONAS = {
     name: "Therapist",
     desc: "Reflective, empathetic, insightful",
     system: "You are a thoughtful therapist specializing in addiction recovery. You ask reflective questions, validate feelings, and help the user understand their patterns. Reference their data to build insight. Keep responses gentle and concise. Use their name if known.",
-  },
-  custom: {
-    name: "Custom",
-    desc: "Your own personality",
-    system: "You are a supportive recovery companion with a custom personality.",
   },
 };
