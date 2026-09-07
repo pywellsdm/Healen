@@ -80,6 +80,8 @@ const ACHROM_THRESHOLD = 8;
 export function resolveAccentColors(hex) {
   const { h, s: sat0, l: lit0 } = hexToHsl(hex || "#6366f1");
   const achrom = sat0 <= ACHROM_THRESHOLD;
+  // True White theme = light mode; True Black / chromatic = dark mode.
+  const mode = achrom && lit0 > 50 ? "light" : "dark";
 
   let accent;
   let bright;
@@ -97,25 +99,38 @@ export function resolveAccentColors(hex) {
   let sat;
 
   if (achrom) {
-    const L = lit0;
     sat = 0;
-    // Clamp the base accent to a minimum visible lightness so a pure black
-    // choice still reads clearly on the dark app background (white stays
-    // bright). The two are clearly distinct: white = bright, black = charcoal.
-    accent = hslToHex(0, 0, Math.max(58, L));
-    bright = hslToHex(0, 0, Math.max(82, Math.min(96, L + 12)));
-    dim = hslToHex(0, 0, Math.max(66, Math.min(90, L)));
-    strong = hslToHex(0, 0, Math.max(24, Math.min(40, L * 0.5)));
-    secondary = hslToHex(0, 0, Math.max(72, Math.min(92, L)));
-    secondaryStrong = hslToHex(0, 0, Math.max(16, Math.min(38, L * 0.6)));
-    contrast = L >= 55 ? "#0b0d18" : "#f1f5f9";
-    // Visible neutral ramp on the dark base: lighter shades read as highlights.
-    shadeDeep = hslToHex(0, 0, Math.max(72, Math.min(80, L + 8)));
-    shadeDark = hslToHex(0, 0, Math.max(78, Math.min(84, L + 14)));
-    shadeMid = hslToHex(0, 0, 86);
-    shadeBright = hslToHex(0, 0, 92);
-    shadeSoft = hslToHex(0, 0, 96);
-    shadePale = "#ffffff";
+    if (mode === "light") {
+      // TRUE WHITE THEME: clean light UI, neutral ink accents that read on white.
+      accent = hslToHex(0, 0, 14);          // near-black ink
+      bright = hslToHex(0, 0, 34);          // dark steel
+      dim = hslToHex(0, 0, 48);             // mid gray
+      strong = hslToHex(0, 0, 8);
+      secondary = hslToHex(0, 0, 38);
+      secondaryStrong = hslToHex(0, 0, 20);
+      contrast = "#ffffff";
+      shadeDeep = hslToHex(0, 0, 22);        // ink for danger
+      shadeDark = hslToHex(0, 0, 38);
+      shadeMid = hslToHex(0, 0, 52);
+      shadeBright = hslToHex(0, 0, 30);
+      shadeSoft = hslToHex(0, 0, 44);
+      shadePale = hslToHex(0, 0, 58);
+    } else {
+      // TRUE BLACK THEME: deep black UI, light neutral accents.
+      accent = hslToHex(0, 0, 92);          // light ink
+      bright = hslToHex(0, 0, 88);
+      dim = hslToHex(0, 0, 74);
+      strong = hslToHex(0, 0, 60);
+      secondary = hslToHex(0, 0, 82);
+      secondaryStrong = hslToHex(0, 0, 50);
+      contrast = "#0b0d18";
+      shadeDeep = hslToHex(0, 0, 74);
+      shadeDark = hslToHex(0, 0, 80);
+      shadeMid = hslToHex(0, 0, 86);
+      shadeBright = hslToHex(0, 0, 92);
+      shadeSoft = hslToHex(0, 0, 96);
+      shadePale = "#ffffff";
+    }
   } else {
     const s = Math.min(95, Math.max(58, sat0));
     const lFill = Math.max(44, Math.min(58, Math.round(lit0 * 0.62)));
@@ -140,6 +155,7 @@ export function resolveAccentColors(hex) {
   return {
     h,
     achrom,
+    mode,
     sat,
     accent,
     bright,

@@ -80,24 +80,60 @@
      backdrop blur. Blanket blur(14px) on every card was the main mobile jank
      source; only the bottom nav and modals keep blur now. ---- */
 
-/* ---- Light mode color overrides (higher specificity than utilities) ---- */
-.light .text-white { color: #1e293b; }
-.light .text-slate-100 { color: #334155; }
-.light .text-slate-200 { color: #3f4d63; }
-.light .text-slate-300 { color: #475569; }
-.light .text-slate-400 { color: #64748b; }
-.light .text-slate-500 { color: #94a3b8; }
-.light .text-slate-600 { color: #a8b5c7; }
+/* ---- Light mode (True White theme) color overrides --------
+   Higher specificity than utilities; flips every hardcoded
+   light-on-dark surface to a dark-on-light equivalent. */
+.light .text-white, .light .text-black { color: #1a2233; }
+.light .text-slate-100 { color: #2b3648; }
+.light .text-slate-200 { color: #3b465a; }
+.light .text-slate-300 { color: #4a576b; }
+.light .text-slate-400 { color: #5d6c83; }
+.light .text-slate-500 { color: #6d7d96; }
+.light .text-slate-600 { color: #7c8ba2; }
+.light .text-slate-700 { color: #556277; }
+.light .text-slate-800 { color: #3d4a5e; }
+.light .text-slate-900 { color: #2b3648; }
 
-.light .bg-white\/5 { background-color: rgba(255, 255, 255, 0.5); }
-.light .bg-white\/10 { background-color: rgba(255, 255, 255, 0.65); }
-.light .bg-white\/\[0\.02\] { background-color: rgba(255, 255, 255, 0.35); }
+.light .bg-white { background-color: #ffffff; }
+.light .bg-white\/\[0\.02\] { background-color: rgba(255, 255, 255, 0.45); }
+.light .bg-white\/5 { background-color: rgba(255, 255, 255, 0.6); }
+.light .bg-white\/8 { background-color: rgba(255, 255, 255, 0.66); }
+.light .bg-white\/10 { background-color: rgba(255, 255, 255, 0.72); }
+.light .bg-white\/15 { background-color: rgba(255, 255, 255, 0.8); }
+.light .bg-white\/20 { background-color: rgba(255, 255, 255, 0.85); }
+.light .bg-white\/25 { background-color: rgba(255, 255, 255, 0.9); }
+.light .bg-white\/30 { background-color: rgba(255, 255, 255, 0.94); }
 
-.light .border-white\/5 { border-color: rgba(30, 41, 59, 0.06); }
-.light .border-white\/10 { border-color: rgba(30, 41, 59, 0.08); }
+.light .bg-slate-50 { background-color: #f4f6f9; }
+.light .bg-slate-100 { background-color: #eef1f5; }
+.light .bg-slate-200 { background-color: #e2e8f0; }
+.light .bg-slate-400 { background-color: #b9c4d2; }
+.light .bg-slate-700\/40 { background-color: rgba(255, 255, 255, 0.42); }
+.light .bg-slate-800\/40 { background-color: rgba(255, 255, 255, 0.4); }
+.light .bg-slate-900 { background-color: #ffffff; }
+.light .bg-slate-900\/50 { background-color: rgba(255, 255, 255, 0.55); }
+.light .bg-slate-900\/70 { background-color: rgba(255, 255, 255, 0.7); }
+.light .bg-slate-900\/80 { background-color: rgba(255, 255, 255, 0.8); }
+.light .bg-slate-950\/55 { background-color: rgba(255, 255, 255, 0.6); }
 
-.light .bg-slate-900\/80 { background-color: rgba(255, 255, 255, 0.7); }
-.light .bg-slate-900\/50 { background-color: rgba(255, 255, 255, 0.5); }
+.light .border-white { border-color: rgba(30, 41, 59, 0.35); }
+.light .border-white\/70 { border-color: rgba(30, 41, 59, 0.7); }
+.light .border-white\/40 { border-color: rgba(30, 41, 59, 0.4); }
+.light .border-white\/30 { border-color: rgba(30, 41, 59, 0.3); }
+.light .border-white\/20 { border-color: rgba(30, 41, 59, 0.2); }
+.light .border-white\/15 { border-color: rgba(30, 41, 59, 0.15); }
+.light .border-white\/10 { border-color: rgba(30, 41, 59, 0.12); }
+.light .border-white\/5 { border-color: rgba(30, 41, 59, 0.08); }
+.light .border-slate-200 { border-color: #dde3ec; }
+.light .border-slate-300 { border-color: #cdd6e2; }
+.light .border-slate-400\/30 { border-color: rgba(148, 163, 184, 0.3); }
+.light .border-slate-500 { border-color: #9aa8bb; }
+.light .border-slate-500\/30 { border-color: rgba(154, 168, 187, 0.3); }
+.light .border-slate-600 { border-color: #7c8ba2; }
+.light .border-slate-700 { border-color: #556277; }
+
+/* Keep gradient text legible in light mode */
+.light .bg-clip-text { -webkit-background-clip: text; }
 
 /* ---- Dark glass surfaces: keep every panel readable on any wallpaper ---- */
 .bg-white\/\[0\.02\] { background-color: rgba(17, 20, 36, 0.24); }
@@ -325,6 +361,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* --- text (semantic tiers are light so they read on the dark base) --- */
 .text-rose-400, .text-red-400 { color: var(--sem-deep); }
+.text-rose-500, .text-rose-500\/70, .text-rose-500\/80, .text-rose-500\/90 { color: var(--sem-deep); }
 .text-rose-300, .text-red-300 { color: var(--sem-dark); }
 .text-rose-200 { color: var(--sem-mid); }
 .text-rose-300\/90, .text-rose-400\/90, .text-rose-400\/80, .text-rose-400\/70,

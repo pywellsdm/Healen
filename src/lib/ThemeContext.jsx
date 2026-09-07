@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { db } from "@/lib/store";
 import { ensureStreakRecord } from "@/lib/streakUtils";
 import minecraftWallpaper from "@/assets/wallpapers/minecraft.png";
-import { applyThemeToRoot, hslToHex } from "@/lib/themeEngine";
+import { applyThemeToRoot, hslToHex, resolveAccentColors } from "@/lib/themeEngine";
 
 const ThemeContext = createContext(null);
 
@@ -199,7 +199,8 @@ export function ThemeProvider({ children }) {
   }, []);
 
   // Apply the full accent theme. Manual hex colors (incl. black/white/gray)
-  // are honored as-is; "auto" matches the wallpaper's dominant hue.
+  // are honored as-is; "auto" matches the wallpaper's dominant hue. White
+  // themes flip the app to light mode; black & chromatic stay in dark mode.
   const applyAccentHue = useCallback(async (url, videoUrl) => {
     const manualHex = localStorage.getItem("reclaim-theme-color-hex");
     const manualHue = localStorage.getItem("reclaim-theme-color");
@@ -214,7 +215,16 @@ export function ThemeProvider({ children }) {
       if (hue == null) hue = await extractHue(url);
       baseHex = hslToHex(hue == null ? 240 : Math.round(hue.toFixed(0)), 70, 60);
     }
-    applyThemeToRoot(document.documentElement, baseHex);
+    const { mode } = resolveAccentColors(baseHex);
+    const root = document.documentElement;
+    if (mode === "light") {
+      root.classList.add("light");
+      root.classList.remove("dark");
+    } else {
+      root.classList.add("dark");
+      root.classList.remove("light");
+    }
+    applyThemeToRoot(root, baseHex);
   }, []);
 
   useEffect(() => {
