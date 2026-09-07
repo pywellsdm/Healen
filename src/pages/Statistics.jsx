@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { db } from "@/lib/store";
 import { ensureStreakRecord, calculateStreakDays, calculateStreakProgress, formatDate, formatDuration, getTotalAppDays } from "@/lib/streakUtils";
@@ -6,19 +6,13 @@ import MilestoneTracker from "@/components/streak/MilestoneTracker";
 import { TRIGGER_LABELS, MOOD_EMOJI } from "@/lib/motivation";
 import { SLEEP_MILESTONES } from "@/lib/milestones";
 import { useMode } from "@/lib/ModeContext";
+import { useTheme } from "@/lib/ThemeContext";
+import { readThemeColors, buildChartPalette } from "@/lib/themeEngine";
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell,
   LineChart, Line, CartesianGrid, ReferenceArea,
 } from "recharts";
 import { TrendingUp, Calendar, Target, Flame, Award, Activity, Moon, AlertTriangle } from "lucide-react";
-
-const PIE_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#ec4899", "#f43f5e", "#f59e0b", "#10b981", "#06b6d4", "#3b82f6"];
-
-const SLEEP_STATUS_COLORS = {
-  success: "#818cf8",
-  short: "#f59e0b",
-  overslept: "#fb7185",
-};
 
 const TOOLTIP_STYLE = {
   background: "#0E0F1A",
@@ -33,6 +27,15 @@ const TOOLTIP_ITEM_STYLE = { color: "#f1f5f9" };
 export default function Statistics() {
   const { mode } = useMode();
   const sleeping = mode === "sleeping";
+  const { themeColor } = useTheme();
+  // Theme-derived chart colors, recomputed whenever the accent changes
+  const themeColors = useMemo(() => readThemeColors(), [themeColor]);
+  const palette = useMemo(() => buildChartPalette(themeColors), [themeColors]);
+  const sleepStatusColors = {
+    success: themeColors.bright,
+    short: themeColors.secondary,
+    overslept: themeColors.strong,
+  };
   const [streak, setStreak] = useState(null);
   const [checkIns, setCheckIns] = useState([]);
   const [relapses, setRelapses] = useState([]);
@@ -131,7 +134,7 @@ export default function Statistics() {
   const sleepChart = sleepEntries.slice(-7).map((s) => ({
     day: new Date(s.start_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     hours: Math.round(((s.duration_min || 0) / 60) * 10) / 10,
-    color: SLEEP_STATUS_COLORS[s.status] || "#818cf8",
+    color: sleepStatusColors[s.status] || themeColors.bright,
     status: s.status,
   }));
   const sleepStats = [
@@ -231,7 +234,7 @@ export default function Statistics() {
                       cursor={{ fill: "rgba(255,255,255,0.03)" }}
                       formatter={(value, _name, item) => [`${value}h`, item.payload.status === "success" ? "Good sleep (7-9h)" : item.payload.status === "short" ? "Too short (<7h)" : "Overslept (>9h)"]}
                     />
-                    <ReferenceArea y1={7} y2={9} fill="#f59e0b" fillOpacity={0.08} />
+                    <ReferenceArea y1={7} y2={9} fill={themeColors.secondary} fillOpacity={0.1} />
                     <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
                       {sleepChart.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
@@ -324,7 +327,7 @@ export default function Statistics() {
                   labelStyle={TOOLTIP_LABEL_STYLE}
                   itemStyle={TOOLTIP_ITEM_STYLE}
                 />
-                <Line type="monotone" dataKey="mood" stroke="#818cf8" strokeWidth={2} dot={{ fill: "#818cf8", r: 3 }} />
+                <Line type="monotone" dataKey="mood" stroke={themeColors.bright} strokeWidth={2} dot={{ fill: themeColors.bright, r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -344,7 +347,7 @@ export default function Statistics() {
                   itemStyle={TOOLTIP_ITEM_STYLE}
                   cursor={{ fill: "rgba(255,255,255,0.03)" }}
                 />
-                <Bar dataKey="urge" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="urge" fill={themeColors.accent} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -358,7 +361,7 @@ export default function Statistics() {
                 <PieChart>
                   <Pie data={triggerData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={40}>
                     {triggerData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      <Cell key={i} fill={palette[i % palette.length]} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -371,7 +374,7 @@ export default function Statistics() {
               <div className="grid grid-cols-2 gap-1 mt-2">
                 {triggerData.map((t, i) => (
                   <div key={t.name} className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                    <div className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <div className="w-2 h-2 rounded-full" style={{ background: palette[i % palette.length] }} />
                     <span className="truncate">{t.name}</span>
                     <span className="text-slate-600 ml-auto">{t.value}</span>
                   </div>

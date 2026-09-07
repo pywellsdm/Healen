@@ -33,14 +33,14 @@ const PIECE_IMAGES = {
   b: { k: bK, q: bQ, r: bR, b: bB, n: bN, p: bP },
 };
 
-// Board colors follow the wallpaper-matched --accent-hue
-const SQ_LIGHT = "hsl(var(--accent-hue) 42% 60% / 0.3)";
-const SQ_DARK = "hsl(var(--accent-hue) 55% 24% / 0.55)";
-const SQ_SELECTED = "hsl(var(--accent-hue) 90% 68% / 0.5)";
-const SQ_LAST = "hsl(var(--accent-hue) 82% 58% / 0.32)";
-const SQ_CHECK = "hsl(0 90% 58% / 0.55)";
-const DOT = "hsl(var(--accent-hue) 90% 80% / 0.95)";
-const CAPTURE_RING = "hsl(var(--accent-hue) 95% 82% / 0.95)";
+// Board colors follow the theme accent (--chess-* set by themeEngine)
+const SQ_LIGHT = "var(--chess-light)";
+const SQ_DARK = "var(--chess-dark)";
+const SQ_SELECTED = "var(--chess-selected)";
+const SQ_LAST = "var(--chess-last)";
+const SQ_CHECK = "var(--chess-check)";
+const DOT = "var(--chess-dot)";
+const CAPTURE_RING = "var(--chess-capture)";
 
 const SIDES = [
   { key: "w", label: "White" },
@@ -739,7 +739,7 @@ export default function ChessGame({ onClose }) {
 
               <div
                 className="relative rounded-xl overflow-hidden border border-white/15 shadow-2xl"
-                style={{ background: "hsl(var(--accent-hue) 50% 16% / 0.6)" }}
+                style={{ background: "linear-gradient(180deg, var(--accent-secondary-strong-30), var(--app-bg-2))" }}
               >
                 <div className="grid grid-cols-8 aspect-square">
                   {boardView.map((sq) => {

@@ -108,7 +108,7 @@ export default function PanicMode() {
           icon: Gamepad2,
           title: "Chess",
           desc: "Beat the AI — refocus your mind",
-          color: "from-rose-500/20 to-red-600/10",
+          color: "from-rose-700/30 to-red-900/20",
           border: "border-rose-400/20",
           iconColor: "text-rose-400",
           action: () => {

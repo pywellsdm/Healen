@@ -235,12 +235,12 @@ export default function Dashboard() {
               </h1>
             </div>
             {sleeping ? (
-              <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1.5">
+              <div className="flex items-center gap-1.5 bg-slate-900/70 backdrop-blur-md border border-white/15 rounded-full px-3 py-1.5 shadow-lg">
                 <Moon className="w-4 h-4 text-indigo-300" />
                 <span className="text-sm font-bold text-indigo-200 tabular-nums">{sleepDays}</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1.5">
+              <div className="flex items-center gap-1.5 bg-slate-900/70 backdrop-blur-md border border-white/15 rounded-full px-3 py-1.5 shadow-lg">
                 <Flame className="w-4 h-4 text-indigo-300" />
                 <span className="text-sm font-bold text-indigo-200 tabular-nums">{currentDays}</span>
               </div>

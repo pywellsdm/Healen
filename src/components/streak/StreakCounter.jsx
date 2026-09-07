@@ -25,6 +25,11 @@ export default function StreakCounter({ startDate }) {
       <div className="relative mb-6">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/10 blur-3xl rounded-full" />
         <div className="relative text-center">
+          {/* Visible shadow layer behind the clipped gradient text */}
+          <div className="absolute inset-0 flex items-baseline justify-center gap-2 pointer-events-none"
+               aria-hidden="true">
+            <span className="text-7xl font-bold text-black/40 tabular-nums">{breakdown.days}</span>
+          </div>
           <div className="flex items-baseline justify-center gap-2">
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.span
@@ -39,7 +44,8 @@ export default function StreakCounter({ startDate }) {
               </motion.span>
             </AnimatePresence>
           </div>
-          <p className="text-sm uppercase tracking-[0.3em] text-indigo-300/70 font-semibold mt-1">
+          <p className="text-sm uppercase tracking-[0.3em] text-indigo-300/70 font-semibold mt-1"
+                 style={{ textShadow: "0 1px 8px rgba(0,0,0,0.4)" }}>
             {breakdown.days === 1 ? "Day Clean" : "Days Clean"}
           </p>
         </div>

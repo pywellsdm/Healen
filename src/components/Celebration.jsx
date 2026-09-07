@@ -57,7 +57,7 @@ export default function Celebration({ celebration, onClose }) {
   let title = "";
   let subtitle = "";
   let emoji = "🔥";
-  let accent = { ring: "ring-indigo-400/40", glow: "rgba(99,102,241,0.5)", bar: "from-indigo-500 to-purple-500" };
+  let accent = { ring: "ring-indigo-400/40", glow: "var(--accent-glow-strong)", bar: "from-indigo-500 to-purple-500" };
 
   if (type === "checkin") {
     title = `Day ${day} Clean!`;

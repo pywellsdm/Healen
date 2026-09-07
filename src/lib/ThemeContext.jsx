@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { db } from "@/lib/store";
 import { ensureStreakRecord } from "@/lib/streakUtils";
 import minecraftWallpaper from "@/assets/wallpapers/minecraft.png";
+import { applyThemeToRoot, hslToHex } from "@/lib/themeEngine";
 
 const ThemeContext = createContext(null);
 
@@ -71,30 +72,6 @@ async function clearVideoWallpaper() {
   } catch (e) {
     /* ignore */
   }
-}
-
-function hexToHsv(hex) {
-  const m = String(hex || "#000000").replace(/^#/, "");
-  const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
-  const int = parseInt(full.slice(0, 6), 16);
-  if (!Number.isFinite(int)) return { h: 0, s: 0, v: 0 };
-  const r = ((int >> 16) & 255) / 255;
-  const g = ((int >> 8) & 255) / 255;
-  const b = (int & 255) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h = Math.round(h * 60);
-    if (h < 0) h += 360;
-  }
-  const s = max === 0 ? 0 : Math.round((d / max) * 100);
-  const v = Math.round(max * 100);
-  return { h, s, v };
 }
 
 function hueFromCanvas(c) {
@@ -221,40 +198,23 @@ export function ThemeProvider({ children }) {
     root.classList.remove("light");
   }, []);
 
-  // Match the accent color to the wallpaper's dominant hue,
-  // unless the user picked a manual theme color.
+  // Apply the full accent theme. Manual hex colors (incl. black/white/gray)
+  // are honored as-is; "auto" matches the wallpaper's dominant hue.
   const applyAccentHue = useCallback(async (url, videoUrl) => {
-    const rootStyle = document.documentElement.style;
-    const setAccent = (h, s, l) => {
-      rootStyle.setProperty("--accent-hue", String(h));
-      rootStyle.setProperty("--accent-sat", `${s}%`);
-      rootStyle.setProperty("--accent-lit", `${l}%`);
-    };
     const manualHex = localStorage.getItem("reclaim-theme-color-hex");
     const manualHue = localStorage.getItem("reclaim-theme-color");
-    // New hex-based storage takes priority
+    let baseHex = "#6366f1";
     if (manualHex) {
-      const { h, s, v } = hexToHsv(manualHex);
-      // For achromatic colors (black/white/grays), saturation is 0 and hue is
-      // meaningless in HSV. Map to gray in HSL to support black/white themes.
-      if (s === 0) {
-        setAccent(240, 0, v);
-      } else {
-        setAccent(h, s, 60);
-      }
-      return;
+      baseHex = manualHex;
+    } else if (manualHue && manualHue !== "auto") {
+      baseHex = hslToHex(Number(manualHue), 70, 60);
+    } else {
+      let hue = null;
+      if (videoUrl) hue = await extractVideoHue(videoUrl);
+      if (hue == null) hue = await extractHue(url);
+      baseHex = hslToHex(hue == null ? 240 : Math.round(hue.toFixed(0)), 70, 60);
     }
-    // Legacy hue-based storage
-    if (manualHue && manualHue !== "auto") {
-      rootStyle.setProperty("--accent-hue", manualHue);
-      rootStyle.setProperty("--accent-sat", "70%");
-      rootStyle.setProperty("--accent-lit", "60%");
-      return;
-    }
-    let hue = null;
-    if (videoUrl) hue = await extractVideoHue(videoUrl);
-    if (hue == null) hue = await extractHue(url);
-    setAccent(hue == null ? "240" : String(hue.toFixed(0)), 70, 60);
+    applyThemeToRoot(document.documentElement, baseHex);
   }, []);
 
   useEffect(() => {

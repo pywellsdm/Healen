@@ -33,9 +33,11 @@ tag = sys.argv[1]
 ver = tag.lstrip("v")
 body = f"""## Healen v{ver}
 
+- **Accurate color picker:** fixed the HSV→hex conversion so the colors you pick are actually the colors you get (green is green, blue is blue — they were swapped before).
+- **Black, white & gray accents now work:** the theme system understands full colors now, not just a hue. Picking pure black, white, or any gray renders a true neutral accent instead of snapping to red.
+- **Smoother dragging:** picking a color no longer re-renders the whole app on every finger move — the preview updates instantly and the theme commits when you release.
 - **Redesigned Settings:** tapping Settings now shows a clean vertical menu — tap any category to see its options, then go back. No more tiny horizontal tabs.
 - **Separate Characters section:** "Your Own Characters" is now its own top-level settings page, not buried under AI Coach Persona.
-- **Modern color picker:** the theme color selector is now a proper saturation-brightness square with a hue slider and preset colors — like a real design tool, not a confusing circle.
 - **Fixed update popup:** the "new update available" banner now reliably appears after a new GitHub release is published, even across sessions. The cache properly resets when the app version changes.
 - **AI time awareness (continued):** your AI coach still knows the current time and greets you naturally when you return after a gap.
 
