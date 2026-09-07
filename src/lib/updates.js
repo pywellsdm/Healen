@@ -1,6 +1,7 @@
 import { GITHUB_REPO, APP_VERSION } from "@/lib/appInfo";
 
 const CACHE_KEY = "healen:update-check";
+const VERSION_KEY = "healen:last-checked-version";
 const CACHE_TTL = 10 * 60 * 1000; // re-check at most every 10 minutes
 
 function parseVersion(v) {
@@ -20,9 +21,20 @@ function isNewer(latest, current) {
   return false;
 }
 
-// Short-lived cache so a dismissed update stays quiet for a few minutes but a
-// freshly released version is never missed (old builds cached this forever in
-// sessionStorage, which is why the popup stopped appearing).
+// Clear the update cache when the app version changes (e.g. after installing a
+// new build) so the banner always re-checks against the fresh release.
+function invalidateCacheOnVersionChange() {
+  try {
+    const lastVersion = localStorage.getItem(VERSION_KEY);
+    if (lastVersion !== APP_VERSION) {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.setItem(VERSION_KEY, APP_VERSION);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function readCache() {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -31,7 +43,7 @@ function readCache() {
     if (!parsed || !parsed.at) return undefined;
     if (Date.now() - parsed.at > CACHE_TTL) return undefined;
     return parsed.result;
-  } catch (e) {
+  } catch {
     return undefined;
   }
 }
@@ -39,7 +51,7 @@ function readCache() {
 function writeCache(result) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), result }));
-  } catch (e) {
+  } catch {
     /* ignore */
   }
 }
@@ -51,14 +63,12 @@ async function fetchLatestRelease() {
       { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" }
     );
     if (res.ok) return await res.json();
-  } catch (e) {
+  } catch {
     /* fall through to package.json fallback */
   }
   return null;
 }
 
-// Fallback that never rate-limits: read the committed version straight from
-// the repo's package.json on the main branch.
 async function fetchRepoVersion() {
   try {
     const res = await fetch(
@@ -69,7 +79,7 @@ async function fetchRepoVersion() {
       const pkg = await res.json();
       if (pkg.version) return `v${pkg.version}`;
     }
-  } catch (e) {
+  } catch {
     /* ignore */
   }
   return null;
@@ -77,6 +87,9 @@ async function fetchRepoVersion() {
 
 export async function checkForUpdate({ force = false } = {}) {
   if (!GITHUB_REPO || !GITHUB_REPO.includes("/")) return null;
+
+  // Always invalidate stale cache when the app version changes
+  invalidateCacheOnVersionChange();
 
   if (!force) {
     const cached = readCache();
@@ -102,10 +115,9 @@ export async function checkForUpdate({ force = false } = {}) {
 
   let result = null;
   if (latestVersion && isNewer(latestVersion, APP_VERSION)) {
+    // Find the APK asset — match any .apk file (the release script names them
+    // Healen-vX.Y.Z.apk, but we also accept any other .apk as fallback).
     const apk =
-      (release?.assets || []).find(
-        (a) => /\.apk$/i.test(a.name) && /universal|default/i.test(a.name)
-      ) ||
       (release?.assets || []).find((a) => /\.apk$/i.test(a.name));
     const fallbackUrl = `https://github.com/${GITHUB_REPO}/releases/tag/${latestVersion}`;
     result = {
