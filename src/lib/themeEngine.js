@@ -132,16 +132,19 @@ export function resolveAccentColors(hex) {
       shadePale = "#ffffff";
     }
   } else {
-    const s = Math.min(95, Math.max(58, sat0));
-    const lFill = Math.max(44, Math.min(58, Math.round(lit0 * 0.62)));
+    // Preserve the chosen color: accent keeps the picked lightness & saturation
+    // so a dark green STAYS dark green (no clamps that collapse everything to
+    // a mid/light tone). Offshoots track the pick by +/− lightness.
+    const s = Math.min(96, Math.max(sat0, 10));
+    const L = lit0;
     sat = s;
-    accent = hslToHex(h, s, lFill);
-    bright = hslToHex(h, s, Math.max(74, Math.min(88, lit0 + 16)));
-    dim = hslToHex(h, s, Math.max(58, Math.min(74, lit0 + 6)));
-    strong = hslToHex(h, s, Math.max(24, Math.min(40, lFill - 16)));
-    secondary = hslToHex(h, s, Math.max(58, Math.min(78, lit0 + 8)));
-    secondaryStrong = hslToHex(h, s, Math.max(20, Math.min(40, lFill - 14)));
-    contrast = lFill >= 55 ? "#0b0d18" : "#f1f5f9";
+    accent = hslToHex(h, s, L);
+    bright = hslToHex(h, s, Math.min(92, Math.max(26, L + 16)));
+    dim = hslToHex(h, s, Math.min(88, Math.max(20, L + 4)));
+    strong = hslToHex(h, s, Math.min(38, Math.max(10, L - 26)));
+    secondary = hslToHex(h, s, Math.min(90, Math.max(24, L + 8)));
+    secondaryStrong = hslToHex(h, s, Math.min(34, Math.max(8, L - 18)));
+    contrast = L >= 55 ? "#0b0d18" : "#f1f5f9";
     // One hue, five lightness tiers — danger/warning/success/info are all
     // this same accent colour, just progressively lighter.
     shadeDeep = hslToHex(h, s, 40);

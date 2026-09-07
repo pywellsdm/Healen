@@ -51,6 +51,15 @@ function hueToHex(hue) {
   return hsvToHex(hue, 70, 60);
 }
 
+// The square never reaches pure white (s=0) or black (v=0) — saturation is
+// kept >= MIN_S and brightness >= MIN_V so every selectable color is a real
+// hue, avoiding accidental white/black app-wide themes.
+const MIN_S = 25;
+const MIN_V = 22;
+const clampS = (s) => Math.max(MIN_S, Math.min(100, s));
+const clampV = (v) => Math.max(MIN_V, Math.min(100, v));
+const clampHsv = (hsv) => ({ ...hsv, s: clampS(hsv.s), v: clampV(hsv.v) });
+
 export default function ColorPicker({ themeColor, setThemeColor }) {
   const isAuto = themeColor === "auto";
   let initialHex = "#6366f1";
@@ -61,7 +70,7 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
       initialHex = hueToHex(Number(themeColor));
     }
   }
-  const initialHsv = hexToHsv(initialHex);
+  const initialHsv = clampHsv(hexToHsv(initialHex));
 
   const [hsv, setHsv] = useState(initialHsv);
   const [hexInput, setHexInput] = useState(initialHex);
@@ -79,7 +88,7 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
     } else {
       h = hueToHex(Number(themeColor));
     }
-    const next = hexToHsv(h);
+    const next = clampHsv(hexToHsv(h));
     setHsv(next);
     hsvRef.current = next;
     setHexInput(h);
@@ -101,7 +110,9 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
     const rect = el.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    return { h: hsvRef.current.h, s: Math.round(x * 100), v: Math.round((1 - y) * 100) };
+    const s = Math.round(MIN_S + x * (100 - MIN_S));
+    const v = Math.round(100 - y * (100 - MIN_V));
+    return { h: hsvRef.current.h, s, v };
   }, []);
 
   const huePointer = useCallback((e) => {
@@ -152,8 +163,14 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
             }
           }}
         >
-          <div className="absolute inset-0" style={{ background: "linear-gradient(to right, #fff, transparent)" }} />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent, #000)" }} />
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(to right, #fff, transparent)" }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(to bottom, transparent, #000)" }}
+          />
           <div
             className="absolute w-4 h-4 rounded-full border-2 border-white shadow-lg -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             style={{ left: `${hsv.s}%`, top: `${100 - hsv.v}%` }}
@@ -196,10 +213,10 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
               const v = e.target.value;
               setHexInput(v);
               if (/^#[0-9a-f]{6}$/i.test(v)) {
-                const next = hexToHsv(v);
+                const next = clampHsv(hexToHsv(v));
                 setHsv(next);
                 hsvRef.current = next;
-                setThemeColor(v);
+                commitToTheme(next);
               }
             }}
             className="w-16 text-center text-[10px] font-mono bg-white/5 border border-white/10 rounded-lg px-1 py-1 text-slate-300 focus:outline-none focus:border-indigo-400/50"
