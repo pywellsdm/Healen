@@ -70,8 +70,8 @@ export default function Celebration({ celebration, onClose }) {
     const tier = TIER_COLORS[milestone.tier];
     accent = {
       ring: tier.border,
-      glow: "rgba(250,204,21,0.5)",
-      bar: "from-yellow-400 to-orange-500",
+      glow: "var(--accent-glow-strong)",
+      bar: "from-indigo-500 to-purple-500",
     };
   } else if (type === "goal") {
     title = `Goal Reached — ${day} days! 🎉`;

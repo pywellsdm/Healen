@@ -186,6 +186,7 @@ input[type="range"]::-webkit-slider-thumb {
    variable with concrete values derived from the user's chosen color. */
 :root {
   --accent-hue: 240;
+  --accent-sat: 78;
   --accent: #6366f1;
   --accent-bright: #c7d2fe;
   --accent-dim: #a5b4fc;
@@ -212,6 +213,33 @@ input[type="range"]::-webkit-slider-thumb {
   --accent-secondary-strong-10: rgba(109, 40, 217, 0.1);
   --accent-secondary-strong-20: rgba(109, 40, 217, 0.2);
   --accent-secondary-strong-30: rgba(109, 40, 217, 0.3);
+  --sem-deep: #4338ca;
+  --sem-dark: #6057dd;
+  --sem-mid: #7f80f2;
+  --sem-bright: #a5b4fc;
+  --sem-soft: #cdd3ff;
+  --sem-pale: #eef0ff;
+  --sem-deep-30: rgba(67, 56, 202, 0.3);
+  --sem-deep-20: rgba(67, 56, 202, 0.2);
+  --sem-deep-15: rgba(67, 56, 202, 0.15);
+  --sem-deep-10: rgba(67, 56, 202, 0.1);
+  --sem-dark-30: rgba(96, 87, 221, 0.3);
+  --sem-dark-20: rgba(96, 87, 221, 0.2);
+  --sem-dark-15: rgba(96, 87, 221, 0.15);
+  --sem-dark-10: rgba(96, 87, 221, 0.1);
+  --sem-mid-40: rgba(127, 128, 242, 0.4);
+  --sem-mid-20: rgba(127, 128, 242, 0.2);
+  --sem-mid-10: rgba(127, 128, 242, 0.1);
+  --sem-bright-40: rgba(165, 180, 252, 0.4);
+  --sem-bright-20: rgba(165, 180, 252, 0.2);
+  --sem-bright-10: rgba(165, 180, 252, 0.1);
+  --sem-soft-30: rgba(205, 211, 255, 0.3);
+  --sem-soft-20: rgba(205, 211, 255, 0.2);
+  --sem-soft-10: rgba(205, 211, 255, 0.1);
+  --sem-pale-30: rgba(238, 240, 255, 0.3);
+  --sem-pale-10: rgba(238, 240, 255, 0.1);
+  --sem-dark-bg: rgba(96, 87, 221, 0.08);
+  --sem-dark-bg-strong: rgba(96, 87, 221, 0.16);
   --ambient-1: rgba(199, 210, 254, 0.14);
   --ambient-2: rgba(167, 139, 250, 0.1);
   --ambient-3: rgba(167, 139, 250, 0.07);
@@ -221,7 +249,7 @@ input[type="range"]::-webkit-slider-thumb {
   --chess-last: rgba(199, 210, 254, 0.26);
   --chess-dot: rgba(199, 210, 254, 0.9);
   --chess-capture: rgba(167, 139, 250, 0.75);
-  --chess-check: rgba(220, 38, 38, 0.55);
+  --chess-check: rgba(67, 56, 202, 0.6);
 }
 
 /* text accents */
@@ -286,6 +314,96 @@ input[type="range"]::-webkit-slider-thumb {
 .bg-indigo-900\/30 { background-color: var(--accent-secondary-strong-30); }
 .bg-purple-900\/30 { background-color: var(--accent-secondary-strong-30); }
 .border-purple-400\/40 { border-color: var(--accent-secondary-40); }
+
+/* =====================================================================
+   SINGLE-HUE SEMANTIC COLORS
+   Every "danger / warning / success / info" colour is remapped to the
+   user's chosen accent at a different lightness tier, so the whole app —
+   including icons, panic mode, charts and badges — follows one colour
+   with different shades. Achromatic themes (black/white/gray) go neutral.
+   ===================================================================== */
+
+/* --- text (semantic tiers are light so they read on the dark base) --- */
+.text-rose-400, .text-red-400 { color: var(--sem-deep); }
+.text-rose-300, .text-red-300 { color: var(--sem-dark); }
+.text-rose-200 { color: var(--sem-mid); }
+.text-rose-300\/90, .text-rose-400\/90, .text-rose-400\/80, .text-rose-400\/70,
+.text-emerald-400\/80, .text-emerald-400\/70, .text-amber-400\/80, .text-amber-400\/70,
+.text-amber-200\/90, .text-cyan-200\/90, .text-violet-200\/90 { color: var(--sem-mid); }
+.text-orange-400 { color: var(--sem-dark); }
+.text-orange-300 { color: var(--sem-mid); }
+.text-amber-400, .text-yellow-400 { color: var(--sem-mid); }
+.text-amber-300, .text-yellow-300 { color: var(--sem-bright); }
+.text-amber-200, .text-yellow-200 { color: var(--sem-soft); }
+.text-emerald-400 { color: var(--sem-bright); }
+.text-emerald-300 { color: var(--sem-bright); }
+.text-emerald-200 { color: var(--sem-soft); }
+.text-cyan-400, .text-sky-400 { color: var(--sem-soft); }
+.text-cyan-300, .text-sky-300 { color: var(--sem-soft); }
+.text-violet-300 { color: var(--sem-dark); }
+.text-rose-50, .text-red-50, .text-emerald-50, .text-amber-50, .text-cyan-50,
+.text-sky-50, .text-violet-50, .text-orange-50, .text-yellow-50, .text-blue-50 { color: var(--sem-pale); }
+
+/* --- surface tints (bg) --- */
+.bg-rose-500\/10, .bg-red-500\/10 { background-color: var(--sem-deep-10); }
+.bg-rose-500\/15 { background-color: var(--sem-deep-15); }
+.bg-rose-500\/20 { background-color: var(--sem-deep-20); }
+.bg-orange-500\/15 { background-color: var(--sem-dark-15); }
+.bg-amber-500\/10, .bg-yellow-500\/10 { background-color: var(--sem-mid-10); }
+.bg-amber-500\/15 { background-color: var(--sem-mid-10); }
+.bg-emerald-500\/10 { background-color: var(--sem-bright-10); }
+.bg-emerald-500\/15 { background-color: var(--sem-bright-10); }
+.bg-emerald-500\/20 { background-color: var(--sem-bright-20); }
+.bg-cyan-500\/10, .bg-sky-500\/20, .bg-teal-500\/10 { background-color: var(--sem-soft-10); }
+.bg-violet-500\/10 { background-color: var(--sem-dark-10); }
+.bg-rose-950\/30 { background-color: var(--sem-deep-30); }
+.bg-rose-950\/50 { background-color: var(--sem-deep-30); }
+.bg-amber-900\/30, .bg-yellow-900\/30, .bg-cyan-900\/30 { background-color: var(--sem-mid-10); }
+.bg-rose-400, .bg-red-500, .bg-orange-400 { background-color: var(--sem-dark); }
+
+/* pastel avatar/card fills (the -50 tints) */
+.bg-rose-50, .bg-red-50 { background-color: var(--sem-pale-10); }
+.bg-emerald-50 { background-color: var(--sem-pale-30); }
+.bg-amber-50, .bg-yellow-50 { background-color: var(--sem-pale-30); }
+.bg-cyan-50, .bg-sky-50 { background-color: var(--sem-pale-30); }
+.bg-violet-50, .bg-purple-50, .bg-blue-50 { background-color: var(--sem-pale-10); }
+.bg-orange-50, .bg-orange-100 { background-color: var(--sem-pale-30); }
+
+/* --- borders --- */
+.border-rose-400\/20, .border-red-400\/20 { border-color: var(--sem-deep-30); }
+.border-rose-400\/30 { border-color: var(--sem-deep-30); }
+.border-rose-400\/50, .border-red-400\/50 { border-color: var(--sem-deep-30); }
+.border-rose-800\/30 { border-color: var(--sem-deep-30); }
+.border-orange-400\/50 { border-color: var(--sem-dark-30); }
+.border-amber-400\/20, .border-amber-400\/30, .border-amber-400\/50, .border-yellow-400\/50 { border-color: var(--sem-mid-40); }
+.border-amber-600\/30 { border-color: var(--sem-mid-40); }
+.border-emerald-400\/40, .border-emerald-400\/50 { border-color: var(--sem-bright-40); }
+.border-cyan-400\/20, .border-cyan-400\/30, .border-sky-400\/30 { border-color: var(--sem-soft-30); }
+.border-violet-400\/20, .border-violet-400\/30 { border-color: var(--sem-dark-30); }
+.border-rose-50, .border-amber-50, .border-cyan-50, .border-emerald-50, .border-violet-50, .border-yellow-50 { border-color: var(--sem-pale-30); }
+
+/* --- gradients (dark tool cards, sleep/panic panels) --- */
+.from-rose-500\/20 { --tw-gradient-from: var(--sem-deep-20); }
+.from-rose-700\/30 { --tw-gradient-from: var(--sem-deep-30); }
+.from-rose-950\/40 { --tw-gradient-from: var(--sem-deep-30); }
+.to-red-600\/10 { --tw-gradient-to: var(--sem-deep-10); }
+.to-red-900\/20 { --tw-gradient-to: var(--sem-deep-20); }
+.to-blue-600\/10, .to-sky-600\/10 { --tw-gradient-to: var(--sem-soft-10); }
+.to-blue-600\/20, .to-sky-600\/20, .to-orange-600\/10, .to-orange-600\/20 { --tw-gradient-to: var(--sem-mid-10); }
+.from-cyan-50 { --tw-gradient-from: var(--sem-pale-10); }
+.from-rose-50, .from-amber-50, .from-emerald-50, .from-sky-50, .from-violet-50 { --tw-gradient-from: var(--sem-pale-10); }
+.to-sky-50, .to-orange-50, .to-blue-50 { --tw-gradient-to: var(--sem-pale-30); }
+.from-yellow-400 { --tw-gradient-from: var(--sem-mid); }
+.to-emerald-400 { --tw-gradient-to: var(--sem-bright); }
+
+/* --- rings & shadows --- */
+.ring-red-400 { --tw-ring-color: var(--sem-deep); }
+.shadow-amber-600\/20 { --tw-shadow-color: var(--sem-mid-40); }
+.shadow-cyan-400\/20 { --tw-shadow-color: var(--sem-soft-30); }
+.shadow-yellow-50 { --tw-shadow-color: var(--sem-pale-30); }
+
+/* misc accent utility */
+.text-rose-500, .text-red-500 { color: var(--sem-deep); }
 
 /* Chess piece landing pop */
 @keyframes chess-land {

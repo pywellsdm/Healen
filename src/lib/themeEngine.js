@@ -72,9 +72,11 @@ export function rgba(hex, alpha) {
 
 const ACHROM_THRESHOLD = 8;
 
-// Derive a full palette from a base color. For chromatic colors the accent is
-// kept deep/vivid; for achromatic (black/white/gray) everything stays neutral
-// so nothing snaps to an arbitrary hue (the old "black becomes purple" bug).
+// Semantic color tiers. Each icon/stat/chart uses one of these shades so the
+// WHOLE app follows a single accent hue — danger, warning, success and info
+// are just darker/lighter shades of the same color, never unrelated hues.
+// For achromatic (black/white/gray) themes the tiers become a neutral gray
+// ramp tuned for visibility on the dark app background.
 export function resolveAccentColors(hex) {
   const { h, s: sat0, l: lit0 } = hexToHsl(hex || "#6366f1");
   const achrom = sat0 <= ACHROM_THRESHOLD;
@@ -86,31 +88,59 @@ export function resolveAccentColors(hex) {
   let secondary;
   let secondaryStrong;
   let contrast;
+  let shadeDeep;
+  let shadeDark;
+  let shadeMid;
+  let shadeBright;
+  let shadeSoft;
+  let shadePale;
+  let sat;
 
   if (achrom) {
     const L = lit0;
-    accent = hslToHex(0, 0, L);
-    bright = hslToHex(0, 0, Math.max(78, Math.min(94, L)));
-    dim = hslToHex(0, 0, Math.max(66, Math.min(88, L * 0.95)));
-    strong = hslToHex(0, 0, Math.max(0, Math.min(36, L * 0.55)));
+    sat = 0;
+    // Clamp the base accent to a minimum visible lightness so a pure black
+    // choice still reads clearly on the dark app background (white stays
+    // bright). The two are clearly distinct: white = bright, black = charcoal.
+    accent = hslToHex(0, 0, Math.max(58, L));
+    bright = hslToHex(0, 0, Math.max(82, Math.min(96, L + 12)));
+    dim = hslToHex(0, 0, Math.max(66, Math.min(90, L)));
+    strong = hslToHex(0, 0, Math.max(24, Math.min(40, L * 0.5)));
     secondary = hslToHex(0, 0, Math.max(72, Math.min(92, L)));
-    secondaryStrong = hslToHex(0, 0, Math.max(18, Math.min(40, L * 0.6)));
+    secondaryStrong = hslToHex(0, 0, Math.max(16, Math.min(38, L * 0.6)));
     contrast = L >= 55 ? "#0b0d18" : "#f1f5f9";
+    // Visible neutral ramp on the dark base: lighter shades read as highlights.
+    shadeDeep = hslToHex(0, 0, Math.max(72, Math.min(80, L + 8)));
+    shadeDark = hslToHex(0, 0, Math.max(78, Math.min(84, L + 14)));
+    shadeMid = hslToHex(0, 0, 86);
+    shadeBright = hslToHex(0, 0, 92);
+    shadeSoft = hslToHex(0, 0, 96);
+    shadePale = "#ffffff";
   } else {
     const s = Math.min(95, Math.max(58, sat0));
     const lFill = Math.max(44, Math.min(58, Math.round(lit0 * 0.62)));
+    sat = s;
     accent = hslToHex(h, s, lFill);
     bright = hslToHex(h, s, Math.max(74, Math.min(88, lit0 + 16)));
     dim = hslToHex(h, s, Math.max(58, Math.min(74, lit0 + 6)));
     strong = hslToHex(h, s, Math.max(24, Math.min(40, lFill - 16)));
-    secondary = hslToHex((h + 40) % 360, Math.min(92, s + 4), Math.max(58, Math.min(78, lit0 + 8)));
-    secondaryStrong = hslToHex((h + 40) % 360, Math.min(92, s + 4), Math.max(20, Math.min(40, lFill - 14)));
+    secondary = hslToHex(h, s, Math.max(58, Math.min(78, lit0 + 8)));
+    secondaryStrong = hslToHex(h, s, Math.max(20, Math.min(40, lFill - 14)));
     contrast = lFill >= 55 ? "#0b0d18" : "#f1f5f9";
+    // One hue, five lightness tiers — danger/warning/success/info are all
+    // this same accent colour, just progressively lighter.
+    shadeDeep = hslToHex(h, s, 40);
+    shadeDark = hslToHex(h, s, 50);
+    shadeMid = hslToHex(h, s, 60);
+    shadeBright = hslToHex(h, s, 70);
+    shadeSoft = hslToHex(h, s, 80);
+    shadePale = hslToHex(h, s, 90);
   }
 
   return {
     h,
     achrom,
+    sat,
     accent,
     bright,
     dim,
@@ -118,6 +148,12 @@ export function resolveAccentColors(hex) {
     secondary,
     secondaryStrong,
     contrast,
+    shadeDeep,
+    shadeDark,
+    shadeMid,
+    shadeBright,
+    shadeSoft,
+    shadePale,
     glow: rgba(bright, 0.35),
     glowStrong: rgba(bright, 0.6),
     glowDeep: rgba(strong, 0.38),
@@ -128,6 +164,7 @@ export function resolveAccentColors(hex) {
 export function buildThemeVars(c) {
   return {
     "--accent-hue": String(c.h),
+    "--accent-sat": String(c.sat),
     "--accent": c.accent,
     "--accent-bright": c.bright,
     "--accent-dim": c.dim,
@@ -154,6 +191,35 @@ export function buildThemeVars(c) {
     "--accent-secondary-strong-10": rgba(c.secondaryStrong, 0.1),
     "--accent-secondary-strong-20": rgba(c.secondaryStrong, 0.2),
     "--accent-secondary-strong-30": rgba(c.secondaryStrong, 0.3),
+    // semantic single-hue shade tiers (--sem-*)
+    "--sem-deep": c.shadeDeep,
+    "--sem-dark": c.shadeDark,
+    "--sem-mid": c.shadeMid,
+    "--sem-bright": c.shadeBright,
+    "--sem-soft": c.shadeSoft,
+    "--sem-pale": c.shadePale,
+    "--sem-deep-30": rgba(c.shadeDeep, 0.3),
+    "--sem-deep-20": rgba(c.shadeDeep, 0.2),
+    "--sem-deep-15": rgba(c.shadeDeep, 0.15),
+    "--sem-deep-10": rgba(c.shadeDeep, 0.1),
+    "--sem-dark-30": rgba(c.shadeDark, 0.3),
+    "--sem-dark-20": rgba(c.shadeDark, 0.2),
+    "--sem-dark-15": rgba(c.shadeDark, 0.15),
+    "--sem-dark-10": rgba(c.shadeDark, 0.1),
+    "--sem-mid-40": rgba(c.shadeMid, 0.4),
+    "--sem-mid-20": rgba(c.shadeMid, 0.2),
+    "--sem-mid-10": rgba(c.shadeMid, 0.1),
+    "--sem-bright-40": rgba(c.shadeBright, 0.4),
+    "--sem-bright-20": rgba(c.shadeBright, 0.2),
+    "--sem-bright-10": rgba(c.shadeBright, 0.1),
+    "--sem-soft-30": rgba(c.shadeSoft, 0.3),
+    "--sem-soft-20": rgba(c.shadeSoft, 0.2),
+    "--sem-soft-10": rgba(c.shadeSoft, 0.1),
+    "--sem-pale-30": rgba(c.shadePale, 0.3),
+    "--sem-pale-10": rgba(c.shadePale, 0.1),
+    // neutral ramp for -50 pastel backgrounds & text-slate variants
+    "--sem-dark-bg": rgba(c.shadeDark, 0.08),
+    "--sem-dark-bg-strong": rgba(c.shadeDark, 0.16),
     "--ambient-1": rgba(c.bright, 0.14),
     "--ambient-2": rgba(c.secondary, 0.1),
     "--ambient-3": rgba(c.secondary, 0.07),
@@ -163,7 +229,7 @@ export function buildThemeVars(c) {
     "--chess-last": rgba(c.bright, 0.26),
     "--chess-dot": rgba(c.bright, 0.9),
     "--chess-capture": rgba(c.secondary, 0.75),
-    "--chess-check": "rgba(220,38,38,0.55)",
+    "--chess-check": rgba(c.shadeDeep, 0.6),
   };
 }
 
@@ -184,34 +250,26 @@ export function readThemeColors() {
     strong: get("--accent-strong") || "#4338ca",
     secondary: get("--accent-secondary") || "#a78bfa",
     secondaryStrong: get("--accent-secondary-strong") || "#6d28d9",
+    semDeep: get("--sem-deep") || "#4338ca",
+    semDark: get("--sem-dark") || "#6057dd",
+    semMid: get("--sem-mid") || "#7f80f2",
+    semBright: get("--sem-bright") || "#a5b4fc",
+    semSoft: get("--sem-soft") || "#cdd3ff",
+    semPale: get("--sem-pale") || "#eef0ff",
   };
 }
 
-// A set of chart colors derived from the current accent. Neutral themes get a
-// tuned gray ramp; chromatic themes rotate the hue for variety.
+// A single-hue chart palette derived from the current accent — every slice is
+// the same colour at a different lightness, so the whole chart stays themed.
 export function buildChartPalette(colors) {
-  const { h, s, l } = hexToHsl(colors.accent);
-  const achrom = s <= ACHROM_THRESHOLD;
-  if (achrom) {
-    return [
-      colors.bright,
-      colors.dim,
-      colors.accent,
-      colors.strong,
-      hslToHex(0, 0, 90),
-      hslToHex(0, 0, 74),
-      hslToHex(0, 0, 58),
-      hslToHex(0, 0, 40),
-    ];
-  }
   return [
+    colors.semDeep,
+    colors.semDark,
+    colors.semMid,
+    colors.semBright,
+    colors.semSoft,
     colors.accent,
-    colors.secondary,
-    hslToHex((h + 55) % 360, s, Math.min(70, l + 8)),
-    hslToHex((h + 110) % 360, s, 62),
-    hslToHex((h + 165) % 360, s, 55),
-    hslToHex((h + 220) % 360, s, 60),
     colors.bright,
-    hslToHex((h + 275) % 360, s, 50),
+    colors.semPale,
   ];
 }

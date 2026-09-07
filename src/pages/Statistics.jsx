@@ -32,9 +32,9 @@ export default function Statistics() {
   const themeColors = useMemo(() => readThemeColors(), [themeColor]);
   const palette = useMemo(() => buildChartPalette(themeColors), [themeColors]);
   const sleepStatusColors = {
-    success: themeColors.bright,
-    short: themeColors.secondary,
-    overslept: themeColors.strong,
+    success: themeColors.semBright,
+    short: themeColors.semMid,
+    overslept: themeColors.semDeep,
   };
   const [streak, setStreak] = useState(null);
   const [checkIns, setCheckIns] = useState([]);
