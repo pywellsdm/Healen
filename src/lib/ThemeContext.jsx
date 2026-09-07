@@ -73,6 +73,30 @@ async function clearVideoWallpaper() {
   }
 }
 
+function hexToHsv(hex) {
+  const m = String(hex || "#000000").replace(/^#/, "");
+  const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+  const int = parseInt(full.slice(0, 6), 16);
+  if (!Number.isFinite(int)) return { h: 0, s: 0, v: 0 };
+  const r = ((int >> 16) & 255) / 255;
+  const g = ((int >> 8) & 255) / 255;
+  const b = (int & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : Math.round((d / max) * 100);
+  const v = Math.round(max * 100);
+  return { h, s, v };
+}
+
 function hueFromCanvas(c) {
   try {
     const ctx = c.getContext("2d", { willReadFrequently: true });
@@ -170,7 +194,7 @@ function readNum(key, fallback) {
 export function ThemeProvider({ children }) {
   const [wallpaperUrl, setWallpaperUrlState] = useState(() => localStorage.getItem("reclaim-wallpaper") || DEFAULT_WALLPAPER);
   const [wallpaperBlur, setWallpaperBlurState] = useState(() => Number(localStorage.getItem("reclaim-blur")) || DEFAULT_BLUR);
-  const [themeColor, setThemeColorState] = useState(() => localStorage.getItem("reclaim-theme-color") || "auto");
+  const [themeColor, setThemeColorState] = useState(() => localStorage.getItem("reclaim-theme-color-hex") || localStorage.getItem("reclaim-theme-color") || "auto");
   const [videoWallpaperUrl, setVideoWallpaperUrlState] = useState(() => localStorage.getItem("reclaim-video-wallpaper") || null);
   const [wallpaperZoom, setWallpaperZoomState] = useState(() => readNum("reclaim-wallpaper-zoom", DEFAULT_WALLPAPER_ZOOM));
   const [wallpaperPosX, setWallpaperPosXState] = useState(() => readNum("reclaim-wallpaper-posx", DEFAULT_WALLPAPER_POS_X));
@@ -200,15 +224,37 @@ export function ThemeProvider({ children }) {
   // Match the accent color to the wallpaper's dominant hue,
   // unless the user picked a manual theme color.
   const applyAccentHue = useCallback(async (url, videoUrl) => {
-    const manual = localStorage.getItem("reclaim-theme-color");
-    if (manual && manual !== "auto") {
-      document.documentElement.style.setProperty("--accent-hue", manual);
+    const rootStyle = document.documentElement.style;
+    const setAccent = (h, s, l) => {
+      rootStyle.setProperty("--accent-hue", String(h));
+      rootStyle.setProperty("--accent-sat", `${s}%`);
+      rootStyle.setProperty("--accent-lit", `${l}%`);
+    };
+    const manualHex = localStorage.getItem("reclaim-theme-color-hex");
+    const manualHue = localStorage.getItem("reclaim-theme-color");
+    // New hex-based storage takes priority
+    if (manualHex) {
+      const { h, s, v } = hexToHsv(manualHex);
+      // For achromatic colors (black/white/grays), saturation is 0 and hue is
+      // meaningless in HSV. Map to gray in HSL to support black/white themes.
+      if (s === 0) {
+        setAccent(240, 0, v);
+      } else {
+        setAccent(h, s, 60);
+      }
+      return;
+    }
+    // Legacy hue-based storage
+    if (manualHue && manualHue !== "auto") {
+      rootStyle.setProperty("--accent-hue", manualHue);
+      rootStyle.setProperty("--accent-sat", "70%");
+      rootStyle.setProperty("--accent-lit", "60%");
       return;
     }
     let hue = null;
     if (videoUrl) hue = await extractVideoHue(videoUrl);
     if (hue == null) hue = await extractHue(url);
-    document.documentElement.style.setProperty("--accent-hue", hue == null ? "240" : String(hue.toFixed(0)));
+    setAccent(hue == null ? "240" : String(hue.toFixed(0)), 70, 60);
   }, []);
 
   useEffect(() => {
@@ -348,9 +394,16 @@ export function ThemeProvider({ children }) {
   const setThemeColor = useCallback((color) => {
     setThemeColorState(color || "auto");
     if (!color || color === "auto") {
+      localStorage.removeItem("reclaim-theme-color-hex");
+      localStorage.removeItem("reclaim-theme-color");
+    } else if (String(color).startsWith("#")) {
+      // Store as hex directly — preserves black/white/desaturated colors
+      localStorage.setItem("reclaim-theme-color-hex", String(color));
       localStorage.removeItem("reclaim-theme-color");
     } else {
+      // Legacy hue value
       localStorage.setItem("reclaim-theme-color", String(color));
+      localStorage.removeItem("reclaim-theme-color-hex");
     }
   }, []);
 

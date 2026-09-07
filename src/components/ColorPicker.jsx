@@ -3,16 +3,24 @@ import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function hsvToHex(h, s, v) {
+  h = ((h % 360) + 360) % 360;
   s /= 100;
   v /= 100;
-  const f = (n) => {
-    const k = (n + h / 60) % 6;
-    return v - v * s * Math.max(Math.min(k, 4 - k, 1), 0);
-  };
-  const r = Math.round(255 * f(0));
-  const g = Math.round(255 * f(8));
-  const b = Math.round(255 * f(4));
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  const c = v * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = v - c;
+  let r, g, b;
+  const hp = h / 60;
+  if (hp < 1) { r = c; g = x; b = 0; }
+  else if (hp < 2) { r = x; g = c; b = 0; }
+  else if (hp < 3) { r = 0; g = c; b = x; }
+  else if (hp < 4) { r = 0; g = x; b = c; }
+  else if (hp < 5) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  const ri = Math.round((r + m) * 255);
+  const gi = Math.round((g + m) * 255);
+  const bi = Math.round((b + m) * 255);
+  return `#${ri.toString(16).padStart(2, "0")}${gi.toString(16).padStart(2, "0")}${bi.toString(16).padStart(2, "0")}`;
 }
 
 function hexToHsv(hex) {
@@ -45,7 +53,6 @@ function hueToHex(hue) {
 
 export default function ColorPicker({ themeColor, setThemeColor }) {
   const isAuto = themeColor === "auto";
-  // Determine initial hex from stored value
   let initialHex = "#6366f1";
   if (!isAuto) {
     if (String(themeColor).startsWith("#")) {
@@ -58,6 +65,7 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
 
   const [hsv, setHsv] = useState(initialHsv);
   const [hexInput, setHexInput] = useState(initialHex);
+  const hsvRef = useRef(initialHsv);
   const sqRef = useRef(null);
   const hueRef = useRef(null);
   const dragging = useRef(null);
@@ -71,43 +79,50 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
     } else {
       h = hueToHex(Number(themeColor));
     }
-    setHsv(hexToHsv(h));
+    const next = hexToHsv(h);
+    setHsv(next);
+    hsvRef.current = next;
     setHexInput(h);
   }, [themeColor, isAuto]);
 
-  const commitHsv = useCallback((newHsv) => {
+  const updateVisual = useCallback((newHsv) => {
     setHsv(newHsv);
-    const hex = hsvToHex(newHsv.h, newHsv.s, newHsv.v);
-    setHexInput(hex);
-    // Pass hex directly to setThemeColor — ThemeContext stores it as hex
-    setThemeColor(hex);
+    hsvRef.current = newHsv;
+    setHexInput(hsvToHex(newHsv.h, newHsv.s, newHsv.v));
+  }, []);
+
+  const commitToTheme = useCallback((newHsv) => {
+    setThemeColor(hsvToHex(newHsv.h, newHsv.s, newHsv.v));
   }, [setThemeColor]);
 
-  const onSqPointer = useCallback((e) => {
+  const sqPointer = useCallback((e) => {
     const el = sqRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, ((e.clientX ?? e.touches?.[0]?.clientX ?? 0) - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, ((e.clientY ?? e.touches?.[0]?.clientY ?? 0) - rect.top) / rect.height));
-    commitHsv({ h: hsv.h, s: Math.round(x * 100), v: Math.round((1 - y) * 100) });
-  }, [hsv.h, commitHsv]);
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    return { h: hsvRef.current.h, s: Math.round(x * 100), v: Math.round((1 - y) * 100) };
+  }, []);
 
-  const onHuePointer = useCallback((e) => {
+  const huePointer = useCallback((e) => {
     const el = hueRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const y = Math.max(0, Math.min(1, ((e.clientY ?? e.touches?.[0]?.clientY ?? 0) - rect.top) / rect.height));
-    commitHsv({ ...hsv, h: Math.round(y * 359) });
-  }, [hsv, commitHsv]);
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    return { ...hsvRef.current, h: Math.round(y * 359) };
+  }, []);
 
   useEffect(() => {
     if (dragging.current === null) return;
     const onMove = (e) => {
       e.preventDefault();
-      if (dragging.current === "sq") onSqPointer(e);
-      else if (dragging.current === "hue") onHuePointer(e);
+      const next = dragging.current === "sq" ? sqPointer(e) : huePointer(e);
+      if (next) updateVisual(next);
     };
-    const onUp = () => { dragging.current = null; };
+    const onUp = () => {
+      dragging.current = null;
+      commitToTheme(hsvRef.current);
+    };
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -116,19 +131,26 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [onSqPointer, onHuePointer]);
+  }, [sqPointer, huePointer, updateVisual, commitToTheme]);
 
   const currentHex = hsvToHex(hsv.h, hsv.s, hsv.v);
 
   return (
     <div className="space-y-3">
       <div className="flex gap-3">
-        {/* Saturation-Brightness square */}
         <div
           ref={sqRef}
           className="relative w-44 h-44 rounded-xl overflow-hidden cursor-crosshair shrink-0 border border-white/10 touch-none"
           style={{ background: `hsl(${hsv.h}, 100%, 50%)` }}
-          onPointerDown={(e) => { dragging.current = "sq"; onSqPointer(e); }}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            dragging.current = "sq";
+            const next = sqPointer(e);
+            if (next) {
+              updateVisual(next);
+              commitToTheme(next);
+            }
+          }}
         >
           <div className="absolute inset-0" style={{ background: "linear-gradient(to right, #fff, transparent)" }} />
           <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent, #000)" }} />
@@ -138,7 +160,6 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
           />
         </div>
 
-        {/* Hue slider */}
         <div className="flex flex-col gap-1.5">
           <div
             ref={hueRef}
@@ -146,7 +167,15 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
             style={{
               background: "linear-gradient(to bottom, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)",
             }}
-            onPointerDown={(e) => { dragging.current = "hue"; onHuePointer(e); }}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              dragging.current = "hue";
+              const next = huePointer(e);
+              if (next) {
+                updateVisual(next);
+                commitToTheme(next);
+              }
+            }}
           >
             <div
               className="absolute left-1/2 -translate-x-1/2 w-5 h-2 rounded-full border-2 border-white shadow pointer-events-none"
@@ -155,7 +184,6 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
           </div>
         </div>
 
-        {/* Preview + hex */}
         <div className="flex flex-col items-center gap-2">
           <div
             className="w-11 h-11 rounded-full border-2 border-white/20 shadow-inner"
@@ -168,7 +196,9 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
               const v = e.target.value;
               setHexInput(v);
               if (/^#[0-9a-f]{6}$/i.test(v)) {
-                setHsv(hexToHsv(v));
+                const next = hexToHsv(v);
+                setHsv(next);
+                hsvRef.current = next;
                 setThemeColor(v);
               }
             }}
@@ -177,7 +207,6 @@ export default function ColorPicker({ themeColor, setThemeColor }) {
         </div>
       </div>
 
-      {/* Auto button */}
       <button
         onClick={() => setThemeColor("auto")}
         className={cn(
